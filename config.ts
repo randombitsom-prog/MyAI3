@@ -27,3 +27,5 @@ export const OWNER_NAME = "Prof. Daniel Ringel";
 export const WELCOME_MESSAGE = `Hello! I'm ${AI_NAME}, an AI assistant created by ${OWNER_NAME}. I'm here to help you with questions about the course. Feel free to ask me anything!`;
 
 export const CLEAR_CHAT_TEXT = "New";
+
+export const MODERATION_DENIAL_MESSAGE = "Your message violates our guidelines, I can not answer that";
