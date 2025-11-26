@@ -4,6 +4,7 @@ import { MODEL } from '@/config';
 import { SYSTEM_PROMPT } from '@/prompts';
 import { isContentFlagged } from '@/lib/moderation';
 import { searchPinecone } from '@/lib/pinecone';
+import { webSearch } from './tools/web-search';
 
 export const maxDuration = 30;
 export async function POST(req: Request) {
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
     let pineconeCompanies: string[] = [];
     let placementStatsContext = '';
     let transcriptsContext = '';
+    let hasPineconeResults = false;
 
     if (latestUserText) {
         console.log('[VERCEL LOG] User query:', latestUserText);
@@ -77,9 +79,18 @@ export async function POST(req: Request) {
             placementStatsContext = pineconeResult.placementStatsContext || '';
             transcriptsContext = pineconeResult.transcriptsContext || '';
             
+            // Check if we have any Pinecone results
+            hasPineconeResults = !!(
+                placementsContext.trim() ||
+                pineconeCompanies.length > 0 ||
+                placementStatsContext.trim() ||
+                transcriptsContext.trim()
+            );
+            
             // Comprehensive logging for Vercel runtime
             console.log('[VERCEL LOG] Pinecone search completed:', {
                 query: latestUserText,
+                hasResults: hasPineconeResults,
                 placementsContextLength: placementsContext.length,
                 placementsContextPreview: placementsContext.substring(0, 200) + (placementsContext.length > 200 ? '...' : ''),
                 companiesCount: pineconeCompanies.length,
@@ -100,6 +111,7 @@ export async function POST(req: Request) {
             pineconeCompanies = [];
             placementStatsContext = '';
             transcriptsContext = '';
+            hasPineconeResults = false;
         }
     }
 
@@ -127,6 +139,11 @@ export async function POST(req: Request) {
     const truncatedStats = truncateContext(placementStatsContext, statsMax);
     const truncatedTranscripts = truncateContext(transcriptsContext, transcriptsMax);
 
+    // Add web search instruction if Pinecone has no results
+    const webSearchInstruction = !hasPineconeResults 
+        ? '\n\n<web_search_fallback>\n⚠️ IMPORTANT: The Pinecone database returned NO results for this query. You should use the "webSearch" tool to find information from the web. Only use web search when Pinecone has no relevant data.\n</web_search_fallback>'
+        : '\n\n<web_search_fallback>\n✅ Pinecone database has results. Use the provided Pinecone context to answer. Do NOT use web search unless the user explicitly asks for current/real-time information not in the database.\n</web_search_fallback>';
+
     const combinedSystemPrompt = `
 ${SYSTEM_PROMPT}
 
@@ -145,10 +162,13 @@ ${truncatedStats}
 <transcripts_namespace_context>
 ${truncatedTranscripts}
 </transcripts_namespace_context>
+${webSearchInstruction}
 `;
 
     // Log what's being sent to OpenAI
     console.log('[VERCEL LOG] System prompt context summary:', {
+        hasPineconeResults: hasPineconeResults,
+        willUseWebSearch: !hasPineconeResults,
         hasPlacementsContext: !!placementsContext,
         placementsOriginalLength: placementsContext.length,
         placementsTruncatedLength: truncatedPlacements.length,
@@ -164,7 +184,8 @@ ${truncatedTranscripts}
         estimatedTokens: Math.ceil(combinedSystemPrompt.length / 4), // Rough estimate
     });
 
-    const result = streamText({
+    // Conditionally include webSearch tool only if Pinecone has no results
+    const streamTextConfig: any = {
         model: MODEL,
         system: combinedSystemPrompt,
         messages: convertToModelMessages(messages),
@@ -176,7 +197,17 @@ ${truncatedTranscripts}
                 parallelToolCalls: false,
             }
         }
-    });
+    };
+
+    // Only add webSearch tool if Pinecone has no results
+    if (!hasPineconeResults) {
+        streamTextConfig.tools = { webSearch };
+        console.log('[VERCEL LOG] Web search tool enabled (Pinecone has no results)');
+    } else {
+        console.log('[VERCEL LOG] Web search tool disabled (Pinecone has results)');
+    }
+
+    const result = streamText(streamTextConfig);
 
     return result.toUIMessageStreamResponse({
         sendReasoning: true,
