@@ -16,7 +16,7 @@ export const pineconeIndex = pinecone.Index(PINECONE_INDEX_NAME);
 export async function searchPinecone(
     query: string,
 ): Promise<string> {
-    const results = await pineconeIndex.namespace('default').searchRecords({
+    const results = await pineconeIndex.namespace('placements').searchRecords({
         query: {
             inputs: {
                 text: query,
