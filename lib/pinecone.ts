@@ -15,7 +15,7 @@ export const pineconeIndex = pinecone.Index(PINECONE_INDEX_NAME);
 
 export async function searchPinecone(
     query: string,
-): Promise<string> {
+): Promise<{ context: string; companies: string[] }> {
     const results = await pineconeIndex.namespace('placements').searchRecords({
         query: {
             inputs: {
@@ -29,5 +29,20 @@ export async function searchPinecone(
     const chunks = searchResultsToChunks(results);
     const sources = getSourcesFromChunks(chunks);
     const context = getContextFromSources(sources);
-    return `< results > ${context} </results>`;
+    
+    // Extract distinct company names from the chunk text where lines start with "Company: <Name>"
+    const companySet = new Set<string>();
+    for (const chunk of chunks) {
+        const match = chunk.text.match(/Company:\s*(.+)/);
+        if (match && match[1]) {
+            companySet.add(match[1].trim());
+        }
+    }
+
+    const companies = Array.from(companySet);
+
+    return {
+        context: `<results> ${context} </results>`,
+        companies,
+    };
 }
