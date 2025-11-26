@@ -66,6 +66,7 @@ export async function POST(req: Request) {
     let placementsContext = '';
     let pineconeCompanies: string[] = [];
     let placementStatsContext = '';
+    let transcriptsContext = '';
 
     if (latestUserText) {
         console.log('[VERCEL LOG] User query:', latestUserText);
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
             placementsContext = pineconeResult.placementsContext;
             pineconeCompanies = pineconeResult.placementCompanies || [];
             placementStatsContext = pineconeResult.placementStatsContext || '';
+            transcriptsContext = pineconeResult.transcriptsContext || '';
             
             // Comprehensive logging for Vercel runtime
             console.log('[VERCEL LOG] Pinecone search completed:', {
@@ -84,6 +86,8 @@ export async function POST(req: Request) {
                 companies: pineconeCompanies,
                 placementStatsContextLength: placementStatsContext.length,
                 placementStatsContextPreview: placementStatsContext.substring(0, 200) + (placementStatsContext.length > 200 ? '...' : ''),
+                transcriptsContextLength: transcriptsContext.length,
+                transcriptsContextPreview: transcriptsContext.substring(0, 200) + (transcriptsContext.length > 200 ? '...' : ''),
             });
         } catch (error) {
             // Fail open: if Pinecone is unavailable, still answer without RAG context.
@@ -95,6 +99,7 @@ export async function POST(req: Request) {
             placementsContext = '';
             pineconeCompanies = [];
             placementStatsContext = '';
+            transcriptsContext = '';
         }
     }
 
@@ -112,6 +117,10 @@ ${pineconeCompanies.join(', ')}
 <placement_stats_namespace_context>
 ${placementStatsContext}
 </placement_stats_namespace_context>
+
+<transcripts_namespace_context>
+${transcriptsContext}
+</transcripts_namespace_context>
 `;
 
     // Log what's being sent to OpenAI
@@ -119,6 +128,7 @@ ${placementStatsContext}
         hasPlacementsContext: !!placementsContext,
         companiesList: pineconeCompanies.join(', ') || '(empty)',
         hasStatsContext: !!placementStatsContext,
+        hasTranscriptsContext: !!transcriptsContext,
         combinedPromptLength: combinedSystemPrompt.length,
     });
 

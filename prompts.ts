@@ -38,6 +38,12 @@ export const COURSE_CONTEXT_PROMPT = `
 - <placement_stats_namespace_context> ... </placement_stats_namespace_context> contains per-student placement summaries from the "placement_stats" namespace, formatted like:
   "<Student Name> has <YOE> of experience, status: <Status>, company: <Company>, CTC: <CTC> LPA."
 
+- <transcripts_namespace_context> ... </transcripts_namespace_context> contains interview transcripts from past BITSoM placement interviews. Each entry is formatted as:
+  "Company: <Company Name>\nInterviewee: <Student Name>\nTranscript:\n<Full interview transcript with questions and answers>"
+  - These are actual interview transcripts from companies that visited BITSoM.
+  - Use these to answer questions about interview experiences, questions asked, tips, company interview processes, etc.
+  - If a transcript mentions chunk numbers (e.g., "chunk 1/5"), it means the transcript was split across multiple records.
+
 - When answering "which all companies came to BITSoM for placement?" or similar:
   - Check <placement_companies_list> first. If it has company names, list them immediately.
   - Use <placements_namespace_context> for additional details (roles, locations, compensation, cluster/day).
@@ -48,7 +54,13 @@ export const COURSE_CONTEXT_PROMPT = `
   - Extract and report their company, CTC, status, and YOE from the matching row.
   - If the student is not found in the context, say so explicitly.
 
-- Only if ALL three tags (<placement_companies_list>, <placements_namespace_context>, <placement_stats_namespace_context>) are completely empty should you say you don't have placement data available.
+- When answering interview-related questions (e.g., "what questions did KPMG ask?", "interview tips for consulting", "how was the interview process for ABG?"):
+  - Search <transcripts_namespace_context> for relevant company or interviewee names.
+  - Extract specific questions, answers, and interview experiences from the transcripts.
+  - Provide detailed insights based on actual interview transcripts.
+  - If multiple transcripts exist for the same company, mention that and provide a comprehensive overview.
+
+- Only if ALL four tags (<placement_companies_list>, <placements_namespace_context>, <placement_stats_namespace_context>, <transcripts_namespace_context>) are completely empty should you say you don't have placement data available.
 `;
 
 export const SYSTEM_PROMPT = `

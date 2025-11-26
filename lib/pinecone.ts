@@ -35,6 +35,7 @@ export type PlacementNamespacesResult = {
     placementsContext: string;
     placementCompanies: string[];
     placementStatsContext: string;
+    transcriptsContext: string;
 };
 
 async function searchPlacementsNamespace(query: string): Promise<{ context: string; companies: string[] }> {
@@ -146,19 +147,86 @@ ${lines.join('\n')}
 </placement_stats_results>`;
 }
 
+async function searchTranscriptsNamespace(query: string): Promise<string> {
+    console.log('[VERCEL LOG] Searching transcripts namespace with query:', query);
+    
+    // Generate embedding for the query
+    const queryEmbedding = await generateEmbedding(query);
+    console.log('[VERCEL LOG] Generated embedding for transcripts, dimension:', queryEmbedding.length);
+    
+    const results = await pineconeIndex.namespace('transcripts').query({
+        vector: queryEmbedding,
+        topK: PINECONE_TOP_K,
+        includeMetadata: true,
+    });
+
+    console.log('[VERCEL LOG] Transcripts namespace raw results:', {
+        hasResults: !!results,
+        hasMatches: !!(results && results.matches),
+        matchesCount: results?.matches?.length || 0,
+        firstMatchId: results?.matches?.[0]?.id || 'none',
+    });
+
+    const matches = results?.matches || [];
+    
+    console.log('[VERCEL LOG] Transcripts namespace parsed matches:', {
+        matchesCount: matches.length,
+        firstMatchMetadata: matches[0]?.metadata || 'none',
+    });
+
+    if (matches.length === 0) {
+        console.log('[VERCEL LOG] No matches found in transcripts namespace');
+        return '';
+    }
+
+    // Format transcripts with company, interviewee, and transcript text
+    const transcriptEntries: string[] = [];
+    for (const match of matches) {
+        const metadata = match.metadata || {};
+        const company = metadata.company || 'Unknown';
+        const interviewee = metadata.interviewee || 'Unknown';
+        const transcript = metadata.transcript || '';
+        const chunkInfo = metadata.total_chunks > 1 
+            ? ` (chunk ${metadata.chunk_index + 1}/${metadata.total_chunks})`
+            : '';
+        
+        if (transcript) {
+            transcriptEntries.push(
+                `Company: ${company}\n` +
+                `Interviewee: ${interviewee}${chunkInfo}\n` +
+                `Transcript:\n${transcript}`
+            );
+        }
+    }
+
+    console.log('[VERCEL LOG] Transcripts namespace formatted entries:', {
+        entriesCount: transcriptEntries.length,
+    });
+
+    if (transcriptEntries.length === 0) {
+        return '';
+    }
+
+    return `<transcripts_results>
+${transcriptEntries.join('\n\n---\n\n')}
+</transcripts_results>`;
+}
+
 export async function searchPinecone(
     query: string,
 ): Promise<PlacementNamespacesResult> {
     console.log('[VERCEL LOG] Starting searchPinecone with query:', query);
-    const [placements, placementStats] = await Promise.all([
+    const [placements, placementStats, transcripts] = await Promise.all([
         searchPlacementsNamespace(query),
         searchPlacementStatsNamespace(query),
+        searchTranscriptsNamespace(query),
     ]);
 
     console.log('[VERCEL LOG] Initial search results:', {
         placementsCompaniesCount: placements.companies.length,
         placementsContextLength: placements.context.length,
         placementStatsContextLength: placementStats.length,
+        transcriptsContextLength: transcripts.length,
     });
 
     // If placements search returned no companies, try a broader search with "BITSoM placement companies"
@@ -174,6 +242,7 @@ export async function searchPinecone(
                 placementsContext: broaderPlacements.context,
                 placementCompanies: broaderPlacements.companies,
                 placementStatsContext: placementStats,
+                transcriptsContext: transcripts,
             };
         }
     }
@@ -182,6 +251,7 @@ export async function searchPinecone(
         placementsContext: placements.context,
         placementCompanies: placements.companies,
         placementStatsContext: placementStats,
+        transcriptsContext: transcripts,
     };
 
     console.log('[VERCEL LOG] Final searchPinecone result:', {
@@ -189,6 +259,7 @@ export async function searchPinecone(
         placementCompaniesCount: finalResult.placementCompanies.length,
         placementCompanies: finalResult.placementCompanies,
         placementStatsContextLength: finalResult.placementStatsContext.length,
+        transcriptsContextLength: finalResult.transcriptsContext.length,
     });
 
     return finalResult;
