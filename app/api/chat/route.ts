@@ -63,69 +63,38 @@ export async function POST(req: Request) {
     }
 
     // Always fetch placement context from Pinecone for the latest user query.
-    let pineconeContext = '';
+    let placementsContext = '';
     let pineconeCompanies: string[] = [];
+    let placementStatsContext = '';
 
     if (latestUserText) {
         try {
             const pineconeResult = await searchPinecone(latestUserText);
-            pineconeContext = pineconeResult.context;
-            pineconeCompanies = pineconeResult.companies || [];
-
-            // If we have company data from Pinecone, answer directly using it.
-            if (pineconeCompanies.length > 0) {
-                const stream = createUIMessageStream({
-                    execute({ writer }) {
-                        const textId = 'pinecone-company-list';
-
-                        writer.write({
-                            type: 'start',
-                        });
-
-                        writer.write({
-                            type: 'text-start',
-                            id: textId,
-                        });
-
-                        const companiesList = pineconeCompanies.join(', ');
-                        const answer = `Based on the latest placement data I have in the BITSoM IPCS knowledge base, the following companies are currently in scope: ${companiesList}. If you want, I can also share roles, locations, compensation, and cluster/day details for any of these.`;
-
-                        writer.write({
-                            type: 'text-delta',
-                            id: textId,
-                            delta: answer,
-                        });
-
-                        writer.write({
-                            type: 'text-end',
-                            id: textId,
-                        });
-
-                        writer.write({
-                            type: 'finish',
-                        });
-                    },
-                });
-
-                return createUIMessageStreamResponse({ stream });
-            }
+            placementsContext = pineconeResult.placementsContext;
+            pineconeCompanies = pineconeResult.placementCompanies || [];
+            placementStatsContext = pineconeResult.placementStatsContext || '';
         } catch (error) {
             // Fail open: if Pinecone is unavailable, still answer without RAG context.
-            pineconeContext = '';
+            placementsContext = '';
             pineconeCompanies = [];
+            placementStatsContext = '';
         }
     }
 
     const combinedSystemPrompt = `
 ${SYSTEM_PROMPT}
 
-<placement_rag_context>
-${pineconeContext}
-</placement_rag_context>
+<placements_namespace_context>
+${placementsContext}
+</placements_namespace_context>
 
 <placement_companies_list>
 ${pineconeCompanies.join(', ')}
 </placement_companies_list>
+
+<placement_stats_namespace_context>
+${placementStatsContext}
+</placement_stats_namespace_context>
 `;
 
     const result = streamText({
