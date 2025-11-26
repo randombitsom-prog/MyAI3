@@ -103,33 +103,65 @@ export async function POST(req: Request) {
         }
     }
 
+    // Truncate contexts to stay within token limits
+    // Rough estimate: 1 token ≈ 4 characters, so 25,000 tokens ≈ 100,000 chars
+    // Reserve space for system prompt (~2000 chars) and user messages
+    const MAX_CONTEXT_CHARS = 80000; // Conservative limit to stay under 30k tokens
+    
+    function truncateContext(text: string, maxChars: number): string {
+        if (!text || text.length <= maxChars) return text;
+        return text.substring(0, maxChars) + '\n\n[... context truncated for length ...]';
+    }
+    
+    // Allocate space proportionally, but prioritize companies list and placements
+    const companiesList = pineconeCompanies.join(', ');
+    const companiesListChars = companiesList.length;
+    const remainingChars = Math.max(0, MAX_CONTEXT_CHARS - companiesListChars);
+    
+    // Split remaining space: 40% placements, 30% stats, 30% transcripts
+    const placementsMax = Math.floor(remainingChars * 0.4);
+    const statsMax = Math.floor(remainingChars * 0.3);
+    const transcriptsMax = Math.floor(remainingChars * 0.3);
+    
+    const truncatedPlacements = truncateContext(placementsContext, placementsMax);
+    const truncatedStats = truncateContext(placementStatsContext, statsMax);
+    const truncatedTranscripts = truncateContext(transcriptsContext, transcriptsMax);
+
     const combinedSystemPrompt = `
 ${SYSTEM_PROMPT}
 
 <placements_namespace_context>
-${placementsContext}
+${truncatedPlacements}
 </placements_namespace_context>
 
 <placement_companies_list>
-${pineconeCompanies.join(', ')}
+${companiesList}
 </placement_companies_list>
 
 <placement_stats_namespace_context>
-${placementStatsContext}
+${truncatedStats}
 </placement_stats_namespace_context>
 
 <transcripts_namespace_context>
-${transcriptsContext}
+${truncatedTranscripts}
 </transcripts_namespace_context>
 `;
 
     // Log what's being sent to OpenAI
     console.log('[VERCEL LOG] System prompt context summary:', {
         hasPlacementsContext: !!placementsContext,
+        placementsOriginalLength: placementsContext.length,
+        placementsTruncatedLength: truncatedPlacements.length,
         companiesList: pineconeCompanies.join(', ') || '(empty)',
+        companiesCount: pineconeCompanies.length,
         hasStatsContext: !!placementStatsContext,
+        statsOriginalLength: placementStatsContext.length,
+        statsTruncatedLength: truncatedStats.length,
         hasTranscriptsContext: !!transcriptsContext,
+        transcriptsOriginalLength: transcriptsContext.length,
+        transcriptsTruncatedLength: truncatedTranscripts.length,
         combinedPromptLength: combinedSystemPrompt.length,
+        estimatedTokens: Math.ceil(combinedSystemPrompt.length / 4), // Rough estimate
     });
 
     const result = streamText({
