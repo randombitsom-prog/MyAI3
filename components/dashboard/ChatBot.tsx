@@ -356,7 +356,7 @@ export default function ChatBot() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
+      <CardContent className="relative flex-1 flex flex-col p-0 overflow-hidden">
         <ScrollArea className="flex-1 h-full p-4 bg-slate-950/50" ref={scrollAreaRef}>
           <div className="space-y-4">
             {messages.map((message) => (
@@ -413,7 +413,7 @@ export default function ChatBot() {
             )}
           </div>
         </ScrollArea>
-        <div className="p-4 border-t border-slate-700/50 bg-slate-900/50">
+        <div className="sticky bottom-0 p-4 border-t border-slate-700/50 bg-slate-900/70 backdrop-blur supports-[backdrop-filter]:bg-slate-900/60">
           <form onSubmit={onSubmit} className="flex gap-2 mb-3">
             <Input
               placeholder="Type your question here..."
