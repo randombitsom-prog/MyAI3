@@ -23,16 +23,14 @@ const WELCOME_MESSAGE: Message = {
 
 export default function ChatBot() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
@@ -345,18 +343,16 @@ export default function ChatBot() {
 
   return (
     <Card className="h-[calc(100vh-120px)] flex flex-col sticky top-4 bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700/50 shadow-xl">
-      <CardHeader className="border-b border-slate-700/50 bg-gradient-to-r from-orange-600 to-orange-700">
-        <CardTitle className="flex items-center gap-3 text-white">
-          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-            <Bot className="h-5 w-5 text-white" />
+      <CardHeader className="border-b border-slate-700/50 bg-gradient-to-r from-orange-600 to-orange-700 rounded-t-2xl">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm shadow-sm">
+            <Bot className="h-6 w-6 text-white" />
           </div>
-          <div>
-            <div>PlaceBot Assistant</div>
-            <p className="text-xs text-orange-100 font-normal mt-0.5">
-              Always here to help you
-            </p>
+          <div className="flex flex-col text-white leading-tight">
+            <CardTitle className="text-lg font-semibold">PlaceBot Assistant</CardTitle>
+            <p className="text-xs text-orange-100 font-medium">Always here to help you</p>
           </div>
-        </CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col p-0">
         <ScrollArea className="flex-1 p-4 bg-slate-950/50" ref={scrollAreaRef}>
@@ -413,6 +409,7 @@ export default function ChatBot() {
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
         <div className="p-4 border-t border-slate-700/50 bg-slate-900/50">
