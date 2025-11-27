@@ -19,7 +19,6 @@ const cleanResponseText = (text: string) => {
   let cleaned = text.replace(/\*\*/g, '');
   cleaned = cleaned.replace(/--/g, '');
   cleaned = cleaned.replace(/\$/g, '₹');
-  cleaned = cleaned.replace(/\[(.*?)\]\((.*?)\)/g, '$1');
   cleaned = cleaned.replace(/Sources?:[\s\S]*$/i, '').trim();
   return cleaned;
 };
