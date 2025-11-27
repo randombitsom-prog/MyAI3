@@ -354,11 +354,11 @@ export async function fetchPlacementListings(limit = 100): Promise<PlacementList
         const deadline = parsed.deadline ? new Date(parsed.deadline) : undefined;
         const isOpen = deadline ? deadline >= now : true;
         return {
-            id: match.id || randomUUID(),
             sourceName: metadata.source_name ? String(metadata.source_name) : undefined,
             sourceUrl: metadata.source_url ? String(metadata.source_url) : undefined,
             isOpen,
             ...parsed,
+            id: match.id || randomUUID(),
         };
     });
 

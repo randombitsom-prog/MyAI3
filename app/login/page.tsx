@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import Image from 'next/image';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('yourname@bitsom.edu.in');
+  const [password, setPassword] = useState('password123');
+  const [showModal, setShowModal] = useState(true);
   const router = useRouter();
 
   const handleLogin = (e: React.FormEvent) => {
@@ -26,7 +27,30 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 relative">
+      {showModal && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur z-20">
+          <div className="max-w-lg w-full bg-slate-900/90 border border-slate-700 rounded-2xl p-6 space-y-4 text-white shadow-2xl">
+            <h2 className="text-xl font-semibold text-center text-orange-300">Important Notice</h2>
+            <p className="text-sm text-slate-200">
+              This portal is only for BITSoM Students, Alums and Admins.
+            </p>
+            <p className="text-sm text-slate-200">
+              For demo/test purposes Microsoft login has been disabled. To login use:
+            </p>
+            <div className="bg-slate-800/70 border border-slate-700 rounded-xl p-4 text-sm space-y-2">
+              <p><span className="font-semibold text-orange-200">Email:</span> any valid email id</p>
+              <p><span className="font-semibold text-orange-200">Password:</span> anything you like</p>
+            </div>
+            <Button
+              onClick={() => setShowModal(false)}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700"
+            >
+              Okay
+            </Button>
+          </div>
+        </div>
+      )}
       <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur-sm">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
