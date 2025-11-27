@@ -138,8 +138,8 @@ export default function JobPostingsPage() {
                       <p className="text-sm text-slate-600">{listing.role || "Role TBD"}</p>
                     </div>
                     {listing.jobPackage && (
-                      <span className="inline-flex items-center bg-orange-500 text-white text-xs md:text-sm rounded-full px-3 py-1 max-w-full">
-                        <span className="truncate">{listing.jobPackage}</span>
+                      <span className="inline-flex items-center bg-orange-500 text-white text-xs md:text-sm rounded-full px-3 py-1 max-w-full break-words whitespace-normal">
+                        {listing.jobPackage}
                       </span>
                     )}
                   </div>
