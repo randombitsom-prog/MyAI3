@@ -23,12 +23,13 @@ const WELCOME_MESSAGE: Message = {
 };
 
 export default function ChatBot() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, sendMessage, isLoading } = useChat({
     api: '/api/chat',
   });
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [localMessages, setLocalMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [input, setInput] = useState('');
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -72,14 +73,20 @@ export default function ChatBot() {
     setLocalMessages(newLocalMessages);
   }, [messages]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+  };
+
   const handleQuickAction = (action: string) => {
-    handleInputChange({ target: { value: action } } as React.ChangeEvent<HTMLInputElement>);
+    setInput(action);
+    sendMessage({ content: action });
   };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim()) {
-      handleSubmit(e);
+      sendMessage({ content: input.trim() });
+      setInput('');
     }
   };
 
