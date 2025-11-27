@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('password123');
   const [showModal, setShowModal] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const legacyAuth = localStorage.getItem('isAuthenticated');
+    if (legacyAuth) {
+      sessionStorage.setItem('isAuthenticated', legacyAuth);
+      localStorage.removeItem('isAuthenticated');
+    }
+    const isAuthenticated = sessionStorage.getItem('isAuthenticated');
+    if (isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +52,7 @@ export default function LoginPage() {
               For demo/test purposes Microsoft login has been disabled. To login use:
             </p>
             <div className="bg-slate-800/70 border border-slate-700 rounded-xl p-4 text-sm space-y-2">
-              <p><span className="font-semibold text-orange-200">This Portal and PlaceBot is created and managed by BITSoM Students.</span></p>
+              <p><span className="font-semibold text-orange-200">This Portal and PlaceBot is created and managed by BITSoM Students for BITSoM Students.</span></p>
             </div>
             <Button
               onClick={() => setShowModal(false)}
