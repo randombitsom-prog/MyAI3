@@ -68,6 +68,7 @@ export async function POST(req: Request) {
     let pineconeCompanies: string[] = [];
     let placementStatsContext = '';
     let transcriptsContext = '';
+    let linkedinProfilesContext = '';
     let hasPineconeResults = false;
 
     if (latestUserText) {
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
             pineconeCompanies = pineconeResult.placementCompanies || [];
             placementStatsContext = pineconeResult.placementStatsContext || '';
             transcriptsContext = pineconeResult.transcriptsContext || '';
+            linkedinProfilesContext = pineconeResult.linkedinProfilesContext || '';
             
             // Check if we have any Pinecone results
             hasPineconeResults = !!(
@@ -130,19 +132,23 @@ export async function POST(req: Request) {
     const companiesListChars = companiesList.length;
     const remainingChars = Math.max(0, MAX_CONTEXT_CHARS - companiesListChars);
     
-    // Split remaining space: 40% placements, 30% stats, 30% transcripts
-    const placementsMax = Math.floor(remainingChars * 0.4);
-    const statsMax = Math.floor(remainingChars * 0.3);
-    const transcriptsMax = Math.floor(remainingChars * 0.3);
+    // Split remaining space: 35% placements, 25% stats, 25% transcripts, 15% alumni profiles
+    const placementsMax = Math.floor(remainingChars * 0.35);
+    const statsMax = Math.floor(remainingChars * 0.25);
+    const transcriptsMax = Math.floor(remainingChars * 0.25);
+    const linkedinMax = Math.floor(remainingChars * 0.15);
     
     const truncatedPlacements = truncateContext(placementsContext, placementsMax);
     const truncatedStats = truncateContext(placementStatsContext, statsMax);
     const truncatedTranscripts = truncateContext(transcriptsContext, transcriptsMax);
+    const truncatedLinkedIn = truncateContext(linkedinProfilesContext, linkedinMax);
 
     // Add web search instruction based on Pinecone results
     const webSearchInstruction = !hasPineconeResults 
         ? '\n\n<web_search_fallback>\n⚠️ IMPORTANT: The Pinecone database returned NO results for this query. You MUST use the "webSearch" tool to find information from the web.\n</web_search_fallback>'
         : '\n\n<web_search_fallback>\n✅ Pinecone database has some results. PRIORITY RULES:\n1. FIRST: Use Pinecone context to answer questions about BITSoM placements, companies, students, compensation, interview transcripts.\n2. SECOND: If the user asks for information NOT in Pinecone (e.g., LinkedIn profiles, current company websites, real-time news, external resources), you MAY use the "webSearch" tool.\n3. The webSearch tool is available - use it when Pinecone data doesn\'t answer the specific question asked.\n</web_search_fallback>';
+
+    const isAlumniQuery = /\balum(?:ni|nus|na|n)?\b/i.test(latestUserText || '');
 
     const combinedSystemPrompt = `
 ${SYSTEM_PROMPT}
@@ -162,6 +168,14 @@ ${truncatedStats}
 <transcripts_namespace_context>
 ${truncatedTranscripts}
 </transcripts_namespace_context>
+
+<linkedin_profiles_context>
+${truncatedLinkedIn}
+</linkedin_profiles_context>
+
+<alumni_query>
+${isAlumniQuery ? 'YES' : 'NO'}
+</alumni_query>
 ${webSearchInstruction}
 `;
 
@@ -180,6 +194,10 @@ ${webSearchInstruction}
         hasTranscriptsContext: !!transcriptsContext,
         transcriptsOriginalLength: transcriptsContext.length,
         transcriptsTruncatedLength: truncatedTranscripts.length,
+        hasLinkedInContext: !!linkedinProfilesContext,
+        linkedinOriginalLength: linkedinProfilesContext.length,
+        linkedinTruncatedLength: truncatedLinkedIn.length,
+        alumniQuery: isAlumniQuery,
         combinedPromptLength: combinedSystemPrompt.length,
         estimatedTokens: Math.ceil(combinedSystemPrompt.length / 4), // Rough estimate
     });

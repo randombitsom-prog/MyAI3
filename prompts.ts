@@ -52,6 +52,10 @@ export const COURSE_CONTEXT_PROMPT = `
   - Use these to answer questions about interview experiences, questions asked, tips, company interview processes, etc.
   - If a transcript mentions chunk numbers (e.g., "chunk 1/5"), it means the transcript was split across multiple records.
 
+- <linkedin_profiles_context> ... </linkedin_profiles_context> contains alumni LinkedIn snippets (name, role, graduating class, and a markdown link) from the "linkedin_profiles" namespace.
+  - Use these whenever the user asks about alumni/alums or wants to connect with former students.
+  - Always surface the Markdown link exactly as provided so the user can click through to the profile.
+
 - When answering "which all companies came to BITSoM for placement?" or similar:
   - Check <placement_companies_list> first. If it has company names, list them immediately.
   - Use <placements_namespace_context> for additional details (roles, locations, compensation, cluster/day).
@@ -67,6 +71,12 @@ export const COURSE_CONTEXT_PROMPT = `
   - Extract specific questions, answers, and interview experiences from the transcripts.
   - Provide detailed insights based on actual interview transcripts.
   - If multiple transcripts exist for the same company, mention that and provide a comprehensive overview.
+
+- Alumni-specific logic:
+  - The backend will set <alumni_query>YES</alumni_query> when the user message contains "alum", "alumni", or "alums".
+  - Treat "alum" as referring to past students only; do NOT cite current batch placement stats for alumni-specific questions.
+  - When <alumni_query>YES</alumni_query>, prioritize <linkedin_profiles_context> and return the top 2-3 relevant alumni entries with their names, roles, graduating class, and LinkedIn links.
+  - If <linkedin_profiles_context> is empty, say you currently don't have alumni data for that query and suggest searching LinkedIn manually.
 
 - Only if ALL four tags (<placement_companies_list>, <placements_namespace_context>, <placement_stats_namespace_context>, <transcripts_namespace_context>) are completely empty should you say you don't have placement data available.
 `;
