@@ -1,6 +1,6 @@
 {
-  "scraped_at": "2025-11-27T14:41:37.124629",
-  "total_profiles": 104,
+  "scraped_at": "2025-11-27T14:46:07.485271",
+  "total_profiles": 109,
   "alumni": [
     {
       "Name": "Prajakta Bapat",
@@ -1168,6 +1168,41 @@
       "Name": "Skills for Executive Assistant/Scheduler to the Superintendent at New York State Department of Financial Services",
       "LinkedIn URL": "https://www.linkedin.com/in/pritisaldanha/overlay/urn:li:fsd_profilePosition:(ACoAAACOMrcB1qYasKvsHpi9aJvll8yIVeljey8,2394575826)/skill-associations-details",
       "Past Companies": []
+    },
+    {
+      "Name": "Priti Saldanha",
+      "LinkedIn URL": "https://www.linkedin.com/in/pritisaldanha/overlay/experience/2394575826/multiple-media-viewer",
+      "Past Companies": [
+        "Sophia Girls College logo"
+      ]
+    },
+    {
+      "Name": "Skills for Executive Assistant to Senior Vice President at Acacia Network",
+      "LinkedIn URL": "https://www.linkedin.com/in/pritisaldanha/overlay/urn:li:fsd_profilePosition:(ACoAAACOMrcB1qYasKvsHpi9aJvll8yIVeljey8,1691166633)/skill-associations-details",
+      "Past Companies": []
+    },
+    {
+      "Name": "This site can’t be reached",
+      "LinkedIn URL": "https://www.linkedin.com/in/pritisaldanha/overlay/experience/1691166633/multiple-media-viewer",
+      "Past Companies": []
+    },
+    {
+      "Name": "Media",
+      "LinkedIn URL": "https://www.linkedin.com/in/pritisaldanha/overlay/urn:li:fsd_profilePosition:(ACoAAACOMrcB1qYasKvsHpi9aJvll8yIVeljey8,1691166633)/treasury",
+      "Past Companies": [
+        "Sophia Girls College logo",
+        "IBMIBM18,966,320 followers18,966,320 followers",
+        "OracleOracle10,927,850 followers10,927,850 followers",
+        "BoostaBoosta",
+        "8 connections follow this page"
+      ]
+    },
+    {
+      "Name": "Skills for Executive Assistant to Senior Rabbi at Stephen Wise Free Synagogue",
+      "LinkedIn URL": "https://www.linkedin.com/in/pritisaldanha/overlay/urn:li:fsd_profilePosition:(ACoAAACOMrcB1qYasKvsHpi9aJvll8yIVeljey8,1599692735)/skill-associations-details",
+      "Past Companies": [
+        "Sophia Girls College logo"
+      ]
     }
   ],
   "all_companies": [
@@ -1408,6 +1443,7 @@
     "IBMIBM18,966,206 followers18,966,206 followers",
     "IBMIBM18,966,278 followers18,966,278 followers",
     "IBMIBM18,966,291 followers18,966,291 followers",
+    "IBMIBM18,966,320 followers18,966,320 followers",
     "ICICI BankICICI Bank3,806,289 followers3,806,289 followers",
     "IMS Learning Resources Pvt. Ltd.IMS Learning Resources Pvt. Ltd.19,984 followers19,984 followers",
     "INCAE Business SchoolINCAE Business School16 yrs 11 mos16 yrs 11 mosCosta RicaCosta Rica",
@@ -1500,6 +1536,7 @@
     "OracleOracle10,927,796 followers10,927,796 followers",
     "OracleOracle10,927,822 followers10,927,822 followers",
     "OracleOracle10,927,831 followers10,927,831 followers",
+    "OracleOracle10,927,850 followers10,927,850 followers",
     "PVR LimitedPVR Limited153,418 followers153,418 followers",
     "Peak XV PartnersPeak XV Partners",
     "People Trust",
@@ -1609,5 +1646,5 @@
     "nasscomnasscom",
     "upGrad"
   ],
-  "companies_count": 437
+  "companies_count": 439
 }

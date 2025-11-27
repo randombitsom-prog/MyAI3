@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Minimize2, Maximize2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -36,6 +36,7 @@ export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -359,16 +360,38 @@ export default function ChatBot() {
   };
 
   return (
-    <Card className="h-[calc(100vh-120px)] flex flex-col sticky top-4 bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700/50 shadow-xl overflow-hidden">
-      <CardHeader className="border-b border-slate-700/50 bg-gradient-to-r from-orange-600 to-orange-700 rounded-t-2xl">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm shadow-sm">
-            <Bot className="h-6 w-6 text-white" />
+    <Card
+      className={`flex flex-col bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700/50 shadow-xl overflow-hidden transition-all ${
+        isExpanded
+          ? 'fixed inset-0 z-50 max-w-4xl mx-auto my-6 rounded-3xl h-[80vh]'
+          : 'h-[calc(100vh-120px)] sticky top-4 rounded-3xl'
+      }`}
+    >
+      <CardHeader className="border-b border-slate-700/50 bg-gradient-to-br from-orange-500 to-orange-700 rounded-t-3xl">
+        <div className="flex items-center gap-3 justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm shadow-sm">
+              <Bot className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex flex-col text-white leading-tight">
+              <CardTitle className="text-lg font-semibold">PlaceBot Assistant</CardTitle>
+              <p className="text-xs text-orange-100 font-medium">Always here to help you</p>
+            </div>
           </div>
-          <div className="flex flex-col text-white leading-tight">
-            <CardTitle className="text-lg font-semibold">PlaceBot Assistant</CardTitle>
-            <p className="text-xs text-orange-100 font-medium">Always here to help you</p>
-          </div>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-2 rounded-xl bg-white/20 text-white hover:bg-white/30 transition flex items-center gap-1 text-xs"
+          >
+            {isExpanded ? (
+              <>
+                <Minimize2 className="h-4 w-4" /> <span>Collapse</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="h-4 w-4" /> <span>Expand</span>
+              </>
+            )}
+          </button>
         </div>
       </CardHeader>
       <CardContent className="relative flex-1 flex flex-col p-0 overflow-hidden">
