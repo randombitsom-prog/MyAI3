@@ -24,7 +24,9 @@ const WELCOME_MESSAGE: Message = {
 
 export default function ChatBot() {
   const { messages, sendMessage } = useChat({
-    api: '/api/chat',
+    fetch: (url, options) => {
+      return fetch('/api/chat', options);
+    },
   });
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -78,18 +80,34 @@ export default function ChatBot() {
     setInput(e.target.value);
   };
 
-  const handleQuickAction = (action: string) => {
+  const handleQuickAction = async (action: string) => {
     setInput(action);
     setIsLoading(true);
-    sendMessage({ content: action });
+    try {
+      await sendMessage({ 
+        content: action,
+        experimental_attachments: []
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setIsLoading(false);
+    }
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim()) {
       setIsLoading(true);
-      sendMessage({ content: input.trim() });
-      setInput('');
+      try {
+        await sendMessage({ 
+          content: input.trim(),
+          experimental_attachments: []
+        });
+        setInput('');
+      } catch (error) {
+        console.error('Error sending message:', error);
+        setIsLoading(false);
+      }
     }
   };
 
