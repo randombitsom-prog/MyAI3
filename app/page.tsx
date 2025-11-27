@@ -7,22 +7,17 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user is authenticated
+    // Redirect immediately without showing content
     if (typeof window !== 'undefined') {
       const isAuthenticated = localStorage.getItem('isAuthenticated');
       if (isAuthenticated) {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       } else {
-        router.push('/login');
+        router.replace('/login');
       }
     }
   }, [router]);
 
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="text-center">
-        <p className="text-muted-foreground">Redirecting...</p>
-      </div>
-    </div>
-  );
+  // Return null to show nothing while redirecting
+  return null;
 }

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Bot, User } from 'lucide-react';
+import { useChat } from 'ai/react';
 
 interface Message {
   id: string;
@@ -23,10 +24,12 @@ const WELCOME_MESSAGE: Message = {
 
 export default function ChatBot() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const { messages: aiMessages, input: aiInput, handleInputChange: handleAIInputChange, handleSubmit: handleAISubmit, isLoading } = useChat({
+    api: '/api/chat',
+  });
+  
+  const [localMessages, setLocalMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -35,198 +38,59 @@ export default function ChatBot() {
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  }, [messages]);
+  }, [localMessages]);
+
+  // Convert AI SDK messages to local format
+  useEffect(() => {
+    const newLocalMessages: Message[] = [WELCOME_MESSAGE];
+    
+    aiMessages.forEach((msg) => {
+      let text = '';
+      if (msg.parts) {
+        msg.parts.forEach((part: { type?: string; text?: string }) => {
+          if (part.type === 'text' && part.text) {
+            text += part.text;
+          }
+        });
+      }
+      
+      if (text) {
+        newLocalMessages.push({
+          id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+          text: text,
+          sender: msg.role === 'user' ? 'user' : 'bot',
+          timestamp: new Date(),
+        });
+      }
+    });
+    
+    setLocalMessages(newLocalMessages);
+  }, [aiMessages]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
-  };
-
-  const sendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      text: text.trim(),
-      sender: 'user',
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
-    // Create a placeholder for the bot's response
-    const botMessageId = `bot-${Date.now()}`;
-    const botMessage: Message = {
-      id: botMessageId,
-      text: '',
-      sender: 'bot',
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, botMessage]);
-
-    // Abort any previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [
-            ...messages
-              .filter(msg => msg.id !== WELCOME_MESSAGE.id) // Exclude welcome message
-              .map(msg => ({
-                id: msg.id,
-                role: msg.sender === 'user' ? 'user' : 'assistant',
-                parts: [
-                  {
-                    type: 'text',
-                    text: msg.text,
-                  },
-                ],
-              })),
-            {
-              id: `user-${Date.now()}`,
-              role: 'user',
-              parts: [
-                {
-                  type: 'text',
-                  text: text.trim(),
-                },
-              ],
-            },
-          ],
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedText = '';
-      let buffer = '';
-
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          
-          try {
-            // UI message stream format: lines start with "0:" followed by JSON
-            if (line.startsWith('0:')) {
-              const data = JSON.parse(line.slice(2));
-              
-              // Handle text-delta events
-              if (data.type === 'text-delta' && data.delta) {
-                accumulatedText += data.delta;
-                setMessages(prev =>
-                  prev.map(msg =>
-                    msg.id === botMessageId
-                      ? { ...msg, text: accumulatedText }
-                      : msg
-                  )
-                );
-              }
-              // Handle text-start (reset accumulated text)
-              else if (data.type === 'text-start') {
-                accumulatedText = '';
-              }
-              // Handle message updates
-              else if (data.type === 'message' && data.message) {
-                const message = data.message;
-                if (message.parts) {
-                  const textParts = message.parts
-                    .filter((part: any) => part.type === 'text')
-                    .map((part: any) => part.text || '')
-                    .join('');
-                  if (textParts) {
-                    accumulatedText = textParts;
-                    setMessages(prev =>
-                      prev.map(msg =>
-                        msg.id === botMessageId
-                          ? { ...msg, text: accumulatedText }
-                          : msg
-                      )
-                    );
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            // Skip invalid JSON lines
-            console.debug('Skipping invalid line:', line);
-          }
-        }
-      }
-
-      // Process any remaining buffer
-      if (buffer.trim() && buffer.startsWith('0:')) {
-        try {
-          const data = JSON.parse(buffer.slice(2));
-          if (data.type === 'text-delta' && data.delta) {
-            accumulatedText += data.delta;
-          }
-        } catch (e) {
-          // Ignore
-        }
-      }
-
-      // Final update to ensure all text is captured
-      if (accumulatedText) {
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === botMessageId
-              ? { ...msg, text: accumulatedText }
-              : msg
-          )
-        );
-      }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        return; // Request was aborted, ignore
-      }
-      console.error('Error sending message:', error);
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === botMessageId
-            ? { ...msg, text: 'Sorry, I encountered an error. Please try again.' }
-            : msg
-        )
-      );
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
+    handleAIInputChange(e);
   };
 
   const handleQuickAction = (action: string) => {
     setInput(action);
-    sendMessage(action);
+    // Set the input value in the AI SDK
+    handleAIInputChange({ target: { value: action } } as React.ChangeEvent<HTMLInputElement>);
+    
+    // Submit after a brief delay to ensure input is set
+    setTimeout(() => {
+      const syntheticEvent = {
+        preventDefault: () => {},
+      } as React.FormEvent<HTMLFormElement>;
+      handleAISubmit(syntheticEvent);
+    }, 10);
   };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
-      sendMessage(input);
+      handleAISubmit(e);
+      setInput('');
     }
   };
 
@@ -248,7 +112,7 @@ export default function ChatBot() {
       <CardContent className="flex-1 flex flex-col p-0">
         <ScrollArea className="flex-1 p-4 bg-slate-950/50" ref={scrollAreaRef}>
           <div className="space-y-4">
-            {messages.map((message) => (
+            {localMessages.map((message) => (
               <div
                 key={message.id}
                 className={`flex gap-3 ${
@@ -268,7 +132,7 @@ export default function ChatBot() {
                   }`}
                 >
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {message.text || (message.sender === 'bot' && isLoading ? '...' : '')}
+                    {message.text}
                   </p>
                   {message.text && (
                     <p className="text-xs mt-2 opacity-60">
@@ -286,17 +150,13 @@ export default function ChatBot() {
                 )}
               </div>
             ))}
-            {isLoading && messages[messages.length - 1]?.sender === 'user' && (
+            {isLoading && (
               <div className="flex gap-3 justify-start">
                 <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
                   <Bot className="h-5 w-5 text-white" />
                 </div>
                 <div className="bg-slate-800/80 text-slate-100 border border-slate-700/50 shadow-lg rounded-2xl p-4">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
+                  <p className="text-sm text-slate-300">Fetching latest data...</p>
                 </div>
               </div>
             )}
@@ -306,14 +166,14 @@ export default function ChatBot() {
           <form onSubmit={onSubmit} className="flex gap-2 mb-3">
             <Input
               placeholder="Type your question here..."
-              value={input}
+              value={aiInput}
               onChange={handleInputChange}
               className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-orange-500 focus:ring-orange-500 h-11 rounded-xl"
               disabled={isLoading}
             />
             <Button 
               type="submit"
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !aiInput.trim()}
               className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 h-11 w-11 rounded-xl shadow-lg shadow-orange-500/30"
             >
               <Send className="h-4 w-4" />
