@@ -148,20 +148,15 @@ export default function JobPostingsPage() {
                       className={
                         listing.isOpen
                           ? "bg-emerald-600 text-white px-3"
-                          : "bg-slate-600 text-slate-100 px-3"
+                          : "bg-red-600 text-white px-3"
                       }
                     >
                       {listing.isOpen ? "Open" : "Closed"}
                     </Badge>
                     {listing.location && <Badge variant="outline">{listing.location}</Badge>}
                     {listing.functionSector && (
-                      <Badge variant="outline" className="text-slate-300 border-slate-600">
+                      <Badge variant="outline" className="text-slate-800 border-slate-400">
                         {listing.functionSector}
-                      </Badge>
-                    )}
-                    {listing.clusterDay && (
-                      <Badge variant="outline" className="text-slate-300 border-slate-600">
-                        {listing.clusterDay}
                       </Badge>
                     )}
                   </div>
@@ -185,17 +180,6 @@ export default function JobPostingsPage() {
                     {listing.description?.slice(0, 500) || "Description unavailable."}
                   </p>
                 </CardContent>
-                {listing.sourceUrl && (
-                  <div className="px-6 pb-4">
-                    <Link
-                      href={listing.sourceUrl}
-                      target="_blank"
-                      className="text-orange-500 text-sm hover:text-orange-400 underline"
-                    >
-                      View on {listing.sourceName || "BITSoM Placement Portal"}
-                    </Link>
-                  </div>
-                )}
               </Card>
             ))}
             {!filtered.length && (
