@@ -79,13 +79,27 @@ export default function ChatBot() {
         },
         body: JSON.stringify({
           messages: [
-            ...messages.map(msg => ({
-              role: msg.sender === 'user' ? 'user' : 'assistant',
-              content: msg.text,
-            })),
+            ...messages
+              .filter(msg => msg.id !== WELCOME_MESSAGE.id) // Exclude welcome message
+              .map(msg => ({
+                id: msg.id,
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                parts: [
+                  {
+                    type: 'text',
+                    text: msg.text,
+                  },
+                ],
+              })),
             {
+              id: `user-${Date.now()}`,
               role: 'user',
-              content: text.trim(),
+              parts: [
+                {
+                  type: 'text',
+                  text: text.trim(),
+                },
+              ],
             },
           ],
         }),
