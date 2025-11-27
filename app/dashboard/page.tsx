@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,47 +11,135 @@ import ChatBot from '@/components/dashboard/ChatBot';
 import { Search, TrendingUp, Users, Building2, IndianRupee, Award, Briefcase, UserCheck, UserX } from 'lucide-react';
 import Image from 'next/image';
 
-const placementStats = {
-  ppos: 41,
-  campusPlaced: 31,
-  offCampusPlaced: 3,
-  totalPlaced: 75,
-  totalPPIs: 3,
-  totalUnplaced: 82,
-  highestCTC: 40,
-  averageCTC: 25.0,
-  lowestCTC: 15.5,
+type PlacementStats = {
+  ppos: number;
+  campusPlaced: number;
+  offCampusPlaced: number;
+  totalPlaced: number;
+  totalPPIs: number;
+  totalUnplaced: number;
+  highestCTC: number;
+  averageCTC: number;
+  lowestCTC: number;
 };
 
-const companyOffers = [
-  { company: 'ABG', offers: 17 },
-  { company: 'Accenture', offers: 4 },
-  { company: 'Accordian', offers: 1 },
-  { company: 'Birla Estates', offers: 1 },
-  { company: 'BoFA', offers: 2 },
-  { company: 'Britania', offers: 2 },
-  { company: 'Colgate', offers: 1 },
-  { company: 'EY', offers: 3 },
-  { company: 'Flipkart', offers: 4 },
-  { company: 'Freyr', offers: 5 },
-  { company: 'ICICI', offers: 1 },
-  { company: 'JPMC', offers: 4 },
-  { company: 'KPMG', offers: 7 },
-  { company: "L'Oréal", offers: 2 },
-  { company: 'McKinsey', offers: 2 },
-  { company: 'Pernod Ricard', offers: 1 },
-  { company: 'Pidilite', offers: 1 },
-  { company: 'PwC', offers: 1 },
-  { company: 'Saint Gobain', offers: 5 },
-  { company: 'Signify', offers: 1 },
-  { company: 'Supervity AI', offers: 1 },
-  { company: 'TCPL', offers: 1 },
-  { company: 'VI', offers: 4 },
-];
+type CompanyOffer = {
+  company: string;
+  offers: number;
+};
+
+type SheetRow = Record<string, string | number>;
+
+const DEFAULT_STATS: PlacementStats = {
+  ppos: 0,
+  campusPlaced: 0,
+  offCampusPlaced: 0,
+  totalPlaced: 0,
+  totalPPIs: 0,
+  totalUnplaced: 0,
+  highestCTC: 0,
+  averageCTC: 0,
+  lowestCTC: 0,
+};
+
+const SHEET_ID = process.env.NEXT_PUBLIC_BITSOM_SHEET_ID || '1sNESQWi2MQlIXuJ99zshKkFGw3bIoG7IgbYizqaaRIo';
+const placementsSheetUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+
+const normalizeNumber = (value: string | number | undefined) => {
+  if (value === undefined || value === null) return NaN;
+  if (typeof value === 'number') return value;
+  const cleaned = String(value).replace(/[^\d.-]/g, '');
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : NaN;
+};
+
+const parseGvizResponse = (text: string): SheetRow[] => {
+  const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const data = JSON.parse(jsonText);
+  const cols = data.table.cols.map((col: any, idx: number) => col.label || `col_${idx}`);
+  return data.table.rows
+    .map((row: any) => {
+      if (!row || !row.c) return null;
+      const obj: SheetRow = {};
+      row.c.forEach((cell: any, idx: number) => {
+        obj[cols[idx]] = cell?.v ?? '';
+      });
+      return obj;
+    })
+    .filter((row): row is SheetRow => Boolean(row));
+};
+
+const buildStatsFromRows = (rows: SheetRow[]): PlacementStats => {
+  if (!rows.length) return DEFAULT_STATS;
+
+  let ppos = 0;
+  let campusPlaced = 0;
+  let offCampusPlaced = 0;
+  let totalPPIs = 0;
+  let totalUnplaced = 0;
+
+  const ctcValues: number[] = [];
+
+  rows.forEach((row) => {
+    const status = String(row['Status'] || row['status'] || '').toLowerCase();
+    const company = String(row['Company'] || row['company'] || '').trim();
+    const ctc = normalizeNumber(row['CTC'] || row['ctc']);
+
+    if (!company) {
+      totalUnplaced += 1;
+    }
+
+    if (!Number.isNaN(ctc)) {
+      ctcValues.push(ctc);
+    }
+
+    if (status.includes('ppo')) ppos += 1;
+    else if (status.includes('off')) offCampusPlaced += 1;
+    else if (status.includes('campus')) campusPlaced += 1;
+
+    if (status.includes('ppi')) totalPPIs += 1;
+  });
+
+  const placedTotal = rows.filter((row) => String(row['Company'] || '').trim()).length;
+
+  const highestCTC = ctcValues.length ? Math.max(...ctcValues) : DEFAULT_STATS.highestCTC;
+  const lowestCTC = ctcValues.length ? Math.min(...ctcValues) : DEFAULT_STATS.lowestCTC;
+  const averageCTC = ctcValues.length
+    ? parseFloat((ctcValues.reduce((sum, val) => sum + val, 0) / ctcValues.length).toFixed(2))
+    : DEFAULT_STATS.averageCTC;
+
+  return {
+    ppos,
+    campusPlaced,
+    offCampusPlaced,
+    totalPlaced: placedTotal,
+    totalPPIs,
+    totalUnplaced,
+    highestCTC,
+    averageCTC,
+    lowestCTC,
+  };
+};
+
+const buildCompanyOffers = (rows: SheetRow[]): CompanyOffer[] => {
+  const counts: Record<string, number> = {};
+  rows.forEach((row) => {
+    const company = String(row['Company'] || row['company'] || '').trim();
+    if (!company) return;
+    counts[company] = (counts[company] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([company, offers]) => ({ company, offers }))
+    .sort((a, b) => b.offers - a.offers);
+};
 
 export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [placementStats, setPlacementStats] = useState<PlacementStats>(DEFAULT_STATS);
+  const [companyOffers, setCompanyOffers] = useState<CompanyOffer[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -64,9 +152,30 @@ export default function Dashboard() {
     }
   }, [router]);
 
-  const filteredCompanies = companyOffers.filter(item =>
-    item.company.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const fetchSheet = async () => {
+      try {
+        const response = await fetch(placementsSheetUrl);
+        const text = await response.text();
+        const rows = parseGvizResponse(text);
+        setPlacementStats(buildStatsFromRows(rows));
+        setCompanyOffers(buildCompanyOffers(rows));
+      } catch (error) {
+        console.error('Failed to load sheet data', error);
+        setLoadError('Unable to load the latest placement data.');
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchSheet();
+  }, []);
+
+  const filteredCompanies = useMemo(() => {
+    return companyOffers.filter(item =>
+      item.company.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [companyOffers, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
@@ -327,41 +436,56 @@ export default function Dashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredCompanies
-                      .filter(item => {
-                        if (filterType === 'high') return item.offers >= 5;
-                        if (filterType === 'medium') return item.offers >= 2 && item.offers <= 4;
-                        if (filterType === 'low') return item.offers === 1;
-                        return true;
-                      })
-                      .map((item, index) => (
-                        <TableRow 
-                          key={index} 
-                          className="border-orange-100 hover:bg-orange-50/50 transition-colors"
-                        >
-                          <TableCell className="text-slate-700 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                              {item.company}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right py-4">
-                            <Badge 
-                              className={
-                                item.offers >= 10 
-                                  ? 'bg-gradient-to-r from-orange-500 to-red-500 px-4 py-1' 
-                                  : item.offers >= 5 
-                                  ? 'bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-1' 
-                                  : item.offers >= 3
-                                  ? 'bg-blue-600 px-4 py-1'
-                                  : 'bg-slate-500 px-3 py-1'
-                              }
-                            >
-                              {item.offers}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                    {isLoadingData && (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-slate-500 py-6">
+                          Loading latest data...
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoadingData && !filteredCompanies.length && (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-slate-500 py-6">
+                          {loadError || 'No companies match the current filters.'}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoadingData &&
+                      filteredCompanies
+                        .filter(item => {
+                          if (filterType === 'high') return item.offers >= 5;
+                          if (filterType === 'medium') return item.offers >= 2 && item.offers <= 4;
+                          if (filterType === 'low') return item.offers === 1;
+                          return true;
+                        })
+                        .map((item, index) => (
+                          <TableRow 
+                            key={index} 
+                            className="border-orange-100 hover:bg-orange-50/50 transition-colors"
+                          >
+                            <TableCell className="text-slate-700 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
+                                {item.company}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right py-4">
+                              <Badge 
+                                className={
+                                  item.offers >= 10 
+                                    ? 'bg-gradient-to-r from-orange-500 to-red-500 px-4 py-1' 
+                                    : item.offers >= 5 
+                                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-1' 
+                                    : item.offers >= 3
+                                    ? 'bg-blue-600 px-4 py-1'
+                                    : 'bg-slate-500 px-3 py-1'
+                                }
+                              >
+                                {item.offers}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                   </TableBody>
                 </Table>
               </div>
