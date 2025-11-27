@@ -1,4 +1,4 @@
-# MyAI3 Repository Guide
+# PlaceBot Repository Guide
 
 ## Adding/Removing Tools
 

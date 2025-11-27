@@ -15,6 +15,7 @@ import sys
 import time
 import json
 import csv
+import re
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -238,49 +239,99 @@ class LinkedInScraper:
         Returns:
             List of profile URLs
         """
-        print(f"🔍 Searching for BITSoM MBA alumni (max {max_results} results)...")
+        print(f"🔍 Searching for BITSoM MBA alumni (target: {max_results} results)...")
         
         # LinkedIn search URL for BITSoM MBA
         search_url = "https://www.linkedin.com/search/results/people/?keywords=BITSoM%20MBA&origin=GLOBAL_SEARCH_HEADER"
         
         try:
             self.driver.get(search_url)
-            time.sleep(3)
+            time.sleep(5)  # Wait longer for page to load
             
             profile_urls = []
-            scroll_pause = 2
-            last_height = self.driver.execute_script("return document.body.scrollHeight")
+            scroll_pause = 3  # Increased pause
+            no_new_profiles_count = 0
+            max_no_new_profiles = 5  # Stop if no new profiles found after 5 scrolls
+            scroll_count = 0
+            max_scrolls = 100  # Maximum number of scrolls to prevent infinite loop
             
-            while len(profile_urls) < max_results:
-                # Scroll down
+            print("   Starting to scroll and collect profiles...")
+            
+            while len(profile_urls) < max_results and scroll_count < max_scrolls:
+                scroll_count += 1
+                previous_count = len(profile_urls)
+                
+                # Scroll down gradually (multiple small scrolls)
+                for i in range(3):
+                    self.driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight * {0.3 + i * 0.35});")
+                    time.sleep(1)
+                
+                # Final scroll to bottom
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(scroll_pause)
                 
-                # Get all profile links
+                # Try to click "Show more results" or "Next" button if it exists
+                try:
+                    # Look for "Show more results" button
+                    show_more_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Show more') or contains(text(), 'See more')]")
+                    for button in show_more_buttons:
+                        if button.is_displayed():
+                            button.click()
+                            time.sleep(2)
+                            break
+                except:
+                    pass
+                
+                # Get all profile links from current page
                 soup = BeautifulSoup(self.driver.page_source, 'html.parser')
                 links = soup.find_all('a', href=True)
                 
                 for link in links:
                     href = link.get('href', '')
-                    if '/in/' in href and href not in profile_urls:
-                        full_url = href if href.startswith('http') else f"https://www.linkedin.com{href}"
-                        profile_urls.append(full_url)
-                        if len(profile_urls) >= max_results:
+                    # More specific check for profile links
+                    if '/in/' in href and 'search' not in href and 'miniProfile' not in href:
+                        # Clean the URL
+                        if href.startswith('/'):
+                            full_url = f"https://www.linkedin.com{href.split('?')[0]}"  # Remove query params
+                        elif href.startswith('http'):
+                            full_url = href.split('?')[0]  # Remove query params
+                        else:
+                            continue
+                        
+                        # Only add if it's a valid profile URL and not already in list
+                        if full_url not in profile_urls and '/in/' in full_url:
+                            profile_urls.append(full_url)
+                
+                # Check if we found new profiles
+                if len(profile_urls) == previous_count:
+                    no_new_profiles_count += 1
+                    if no_new_profiles_count >= max_no_new_profiles:
+                        print(f"   ⚠️  No new profiles found after {max_no_new_profiles} scrolls")
+                        # Try scrolling one more time with longer wait
+                        if scroll_count < max_scrolls:
+                            print("   Trying one more aggressive scroll...")
+                            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                            time.sleep(5)
+                            continue
+                        else:
                             break
+                else:
+                    no_new_profiles_count = 0  # Reset counter if we found new profiles
                 
-                # Check if we've reached the bottom
-                new_height = self.driver.execute_script("return document.body.scrollHeight")
-                if new_height == last_height:
+                if len(profile_urls) >= max_results:
                     break
-                last_height = new_height
                 
-                print(f"   Found {len(profile_urls)} profiles so far...")
+                # Progress update every 10 scrolls or when we find significant new profiles
+                if scroll_count % 10 == 0 or len(profile_urls) % 20 == 0:
+                    print(f"   Scrolled {scroll_count} times, found {len(profile_urls)} profiles so far...")
             
-            print(f"✅ Found {len(profile_urls)} profile URLs")
-            return profile_urls[:max_results]
+            print(f"✅ Found {len(profile_urls)} profile URLs after {scroll_count} scrolls")
+            return profile_urls[:max_results] if len(profile_urls) > max_results else profile_urls
             
         except Exception as e:
             print(f"❌ Search error: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def extract_profile_data(self, profile_url: str) -> Optional[Dict]:
@@ -407,12 +458,15 @@ class LinkedInScraper:
                 print(f"   ⚠️  Error extracting companies: {company_error}")
                 # Continue with empty companies list
             
+            # Clean and filter companies
+            cleaned_companies = self.clean_companies_list(companies) if companies else []
+            
             # Clean and format the data
             try:
                 return {
                     'Name': name,
                     'LinkedIn URL': profile_url,
-                    'Past Companies': list(set(companies)) if companies else []
+                    'Past Companies': cleaned_companies
                 }
             except Exception as format_error:
                 print(f"   ⚠️  Error formatting data for {profile_url}: {format_error}")
@@ -439,17 +493,70 @@ class LinkedInScraper:
             print(f"      Error type: {type(e).__name__}")
             return None
     
-    def scrape_alumni(self, max_profiles: int = 20, delay: int = 5):
+    def load_existing_data(self, json_file: str = "data/bitcom_linkedin_alumni.json") -> set:
+        """
+        Load existing scraped data and return set of already scraped URLs.
+        
+        Args:
+            json_file: Path to existing JSON file
+            
+        Returns:
+            Set of LinkedIn URLs that have already been scraped
+        """
+        scraped_urls = set()
+        
+        if os.path.exists(json_file):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    alumni_list = data.get('alumni', [])
+                    for alumni in alumni_list:
+                        url = alumni.get('LinkedIn URL', '')
+                        if url:
+                            scraped_urls.add(url)
+                    print(f"📂 Loaded {len(scraped_urls)} existing profiles from {json_file}")
+            except Exception as e:
+                print(f"⚠️  Error loading existing data: {e}")
+                print("   Starting fresh...")
+        
+        return scraped_urls
+    
+    def scrape_alumni(self, max_profiles: int = 20, delay: int = 5, exclude_existing: bool = True):
         """
         Scrape alumni profiles and extract company information.
         
         Args:
-            max_profiles: Maximum number of profiles to scrape
+            max_profiles: Maximum number of NEW profiles to scrape (excluding already scraped)
             delay: Delay between requests (seconds)
+            exclude_existing: If True, exclude profiles already in the JSON file
         """
         print(f"\n{'='*60}")
         print("BITSoM LinkedIn Alumni Scraper")
         print(f"{'='*60}\n")
+        
+        # Load existing data if excluding
+        existing_urls = set()
+        if exclude_existing:
+            existing_urls = self.load_existing_data()
+            if existing_urls:
+                # Load existing alumni data into self.alumni_data
+                json_file = "data/bitcom_linkedin_alumni.json"
+                if os.path.exists(json_file):
+                    try:
+                        with open(json_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            existing_alumni = data.get('alumni', [])
+                            # Clean existing data
+                            for alumni in existing_alumni:
+                                cleaned_companies = self.clean_companies_list(alumni.get('Past Companies', []))
+                                self.alumni_data.append({
+                                    'Name': alumni.get('Name', 'Unknown'),
+                                    'LinkedIn URL': alumni.get('LinkedIn URL', ''),
+                                    'Past Companies': cleaned_companies
+                                })
+                            print(f"📂 Loaded {len(existing_alumni)} existing profiles into memory")
+                    except Exception as e:
+                        print(f"⚠️  Error loading existing alumni data: {e}")
         
         try:
             # Setup and login
@@ -458,12 +565,55 @@ class LinkedInScraper:
                 print("❌ Cannot proceed without login")
                 return
             
-            # Search for alumni
-            profile_urls = self.search_alumni(max_results=max_profiles)
+            # Search for alumni - search aggressively to find enough profiles
+            # We need to find at least max_profiles NEW profiles, so search for much more
+            search_max = max_profiles + len(existing_urls) + 200  # Large buffer to account for exclusions
+            print(f"🔍 Searching for up to {search_max} profiles to find {max_profiles} new ones...")
+            
+            profile_urls = self.search_alumni(max_results=search_max)
             
             if not profile_urls:
                 print("❌ No profiles found")
                 return
+            
+            print(f"📊 Found {len(profile_urls)} total profiles from search")
+            
+            # Filter out already scraped URLs
+            if exclude_existing and existing_urls:
+                original_count = len(profile_urls)
+                profile_urls = [url for url in profile_urls if url not in existing_urls]
+                excluded_count = original_count - len(profile_urls)
+                print(f"🔍 Excluded {excluded_count} already scraped profiles")
+                print(f"📊 Have {len(profile_urls)} new profiles (target: {max_profiles})")
+            
+            # If we don't have enough new profiles, try searching again with different approach
+            if len(profile_urls) < max_profiles:
+                print(f"⚠️  Only found {len(profile_urls)} new profiles, but need {max_profiles}")
+                print("   Trying to search for more profiles...")
+                
+                # Try searching with an even higher target
+                additional_search_max = (max_profiles - len(profile_urls)) * 2  # Search for 2x what we need
+                additional_urls = self.search_alumni(max_results=additional_search_max)
+                
+                if additional_urls:
+                    # Filter out duplicates and already scraped
+                    for url in additional_urls:
+                        if url not in profile_urls and (not exclude_existing or url not in existing_urls):
+                            profile_urls.append(url)
+                            if len(profile_urls) >= max_profiles:
+                                break
+                    
+                    print(f"📊 After additional search: {len(profile_urls)} new profiles")
+            
+            # Limit to max_profiles new profiles
+            profile_urls = profile_urls[:max_profiles]
+            
+            if not profile_urls:
+                print("✅ All available profiles have already been scraped!")
+                print(f"   Found {len(existing_urls)} total profiles in database")
+                return
+            
+            print(f"✅ Will scrape {len(profile_urls)} new profiles")
             
             # Extract data from each profile
             print(f"\n📊 Extracting data from {len(profile_urls)} profiles...")
@@ -478,6 +628,14 @@ class LinkedInScraper:
                         if data:
                             self.alumni_data.append(data)
                             print(f"      ✅ Extracted: {data.get('Name', 'Unknown')} - {len(data.get('Past Companies', []))} companies")
+                            
+                            # Save progress after EVERY profile
+                            try:
+                                self.save_progress(is_error=False)
+                                print(f"      💾 Saved to JSON ({len(self.alumni_data)} total profiles)")
+                            except Exception as save_error:
+                                print(f"      ⚠️  Error saving progress: {save_error}")
+                                # Continue anyway, don't stop the scraping
                         else:
                             print(f"      ⚠️  Failed to extract data (returned None)")
                             failed_count += 1
@@ -487,15 +645,6 @@ class LinkedInScraper:
                         print(f"      Error type: {type(extract_error).__name__}")
                         failed_count += 1
                         # Continue to next profile
-                    
-                    # Save progress every 10 profiles
-                    if i % 10 == 0 and self.alumni_data:
-                        print(f"\n   💾 Auto-saving progress ({len(self.alumni_data)} profiles so far, {failed_count} failed)...")
-                        try:
-                            self.save_progress(is_error=False)
-                        except Exception as save_error:
-                            print(f"      ⚠️  Error saving progress: {save_error}")
-                            # Continue anyway, don't stop the scraping
                     
                     time.sleep(delay)  # Be respectful with rate limiting
                     
@@ -517,8 +666,6 @@ class LinkedInScraper:
             print(f"\n✅ Scraped {len(self.alumni_data)} profiles successfully")
             if failed_count > 0:
                 print(f"⚠️  {failed_count} profiles failed to process (skipped)")
-            
-            print(f"\n✅ Scraped {len(self.alumni_data)} profiles successfully")
             
         except KeyboardInterrupt:
             print("\n\n⚠️  Script interrupted by user")
@@ -547,11 +694,65 @@ class LinkedInScraper:
             
             raise
         
+    def filter_company_name(self, company: str) -> bool:
+        """
+        Filter out invalid company names.
+        
+        Args:
+            company: Company name to check
+            
+        Returns:
+            True if company name is valid, False otherwise
+        """
+        if not company or not company.strip():
+            return False
+        
+        company_lower = company.lower().strip()
+        
+        # Filter out "X connections work here" patterns
+        if re.search(r'\d+\s+connections?\s+works?\s+here', company_lower):
+            return False
+        
+        # Filter out "X connection works here" patterns
+        if re.search(r'\d+\s+connection\s+works\s+here', company_lower):
+            return False
+        
+        # Filter out very short names (likely noise)
+        if len(company.strip()) < 2:
+            return False
+        
+        # Filter out names that are just numbers
+        if company.strip().isdigit():
+            return False
+        
+        return True
+    
+    def clean_companies_list(self, companies: List[str]) -> List[str]:
+        """
+        Clean and filter a list of company names.
+        
+        Args:
+            companies: List of company names
+            
+        Returns:
+            Cleaned and filtered list of company names
+        """
+        cleaned = []
+        for company in companies:
+            if self.filter_company_name(company):
+                # Clean up the company name (remove extra whitespace, etc.)
+                cleaned_name = ' '.join(company.split())
+                if cleaned_name not in cleaned:
+                    cleaned.append(cleaned_name)
+        return cleaned
+    
     def get_all_companies(self) -> List[str]:
-        """Get a list of all unique companies."""
+        """Get a list of all unique companies (filtered)."""
         all_companies = set()
         for alumni in self.alumni_data:
-            all_companies.update(alumni.get('Past Companies', []))
+            companies = alumni.get('Past Companies', [])
+            cleaned = self.clean_companies_list(companies)
+            all_companies.update(cleaned)
         return sorted(list(all_companies))
     
     def save_progress(self, output_file: str = "bitcom_linkedin_alumni.json", is_error: bool = False):
@@ -572,12 +773,15 @@ class LinkedInScraper:
         os.makedirs("data", exist_ok=True)
         
         # Format data as requested: Name, LinkedIn URL, Past Companies
+        # Ensure all companies are filtered and cleaned
         formatted_data = []
         for alumni in self.alumni_data:
+            companies = alumni.get('Past Companies', [])
+            cleaned_companies = self.clean_companies_list(companies)
             formatted_data.append({
                 'Name': alumni.get('Name', 'Unknown'),
                 'LinkedIn URL': alumni.get('LinkedIn URL', ''),
-                'Past Companies': alumni.get('Past Companies', [])
+                'Past Companies': cleaned_companies
             })
         
         output_json = {
@@ -657,8 +861,8 @@ def main():
     scraper = LinkedInScraper(email=email, password=password)
     
     try:
-        # Scrape alumni (adjust max_profiles and delay as needed)
-        scraper.scrape_alumni(max_profiles=350, delay=5)
+        # Scrape 300 more profiles (excluding already scraped ones)
+        scraper.scrape_alumni(max_profiles=300, delay=5, exclude_existing=True)
         
         # Save results
         if scraper.alumni_data:

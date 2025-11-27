@@ -139,10 +139,10 @@ export async function POST(req: Request) {
     const truncatedStats = truncateContext(placementStatsContext, statsMax);
     const truncatedTranscripts = truncateContext(transcriptsContext, transcriptsMax);
 
-    // Add web search instruction if Pinecone has no results
+    // Add web search instruction based on Pinecone results
     const webSearchInstruction = !hasPineconeResults 
-        ? '\n\n<web_search_fallback>\n⚠️ IMPORTANT: The Pinecone database returned NO results for this query. You should use the "webSearch" tool to find information from the web. Only use web search when Pinecone has no relevant data.\n</web_search_fallback>'
-        : '\n\n<web_search_fallback>\n✅ Pinecone database has results. Use the provided Pinecone context to answer. Do NOT use web search unless the user explicitly asks for current/real-time information not in the database.\n</web_search_fallback>';
+        ? '\n\n<web_search_fallback>\n⚠️ IMPORTANT: The Pinecone database returned NO results for this query. You MUST use the "webSearch" tool to find information from the web.\n</web_search_fallback>'
+        : '\n\n<web_search_fallback>\n✅ Pinecone database has some results. PRIORITY RULES:\n1. FIRST: Use Pinecone context to answer questions about BITSoM placements, companies, students, compensation, interview transcripts.\n2. SECOND: If the user asks for information NOT in Pinecone (e.g., LinkedIn profiles, current company websites, real-time news, external resources), you MAY use the "webSearch" tool.\n3. The webSearch tool is available - use it when Pinecone data doesn\'t answer the specific question asked.\n</web_search_fallback>';
 
     const combinedSystemPrompt = `
 ${SYSTEM_PROMPT}
@@ -168,7 +168,7 @@ ${webSearchInstruction}
     // Log what's being sent to OpenAI
     console.log('[VERCEL LOG] System prompt context summary:', {
         hasPineconeResults: hasPineconeResults,
-        willUseWebSearch: !hasPineconeResults,
+        webSearchEnabled: true, // Always enabled now
         hasPlacementsContext: !!placementsContext,
         placementsOriginalLength: placementsContext.length,
         placementsTruncatedLength: truncatedPlacements.length,
@@ -184,11 +184,12 @@ ${webSearchInstruction}
         estimatedTokens: Math.ceil(combinedSystemPrompt.length / 4), // Rough estimate
     });
 
-    // Conditionally include webSearch tool only if Pinecone has no results
+    // Always enable webSearch tool, but AI will prioritize Pinecone based on instructions
     const streamTextConfig: any = {
         model: MODEL,
         system: combinedSystemPrompt,
         messages: convertToModelMessages(messages),
+        tools: { webSearch }, // Always available
         stopWhen: stepCountIs(10),
         providerOptions: {
             openai: {
@@ -199,13 +200,7 @@ ${webSearchInstruction}
         }
     };
 
-    // Only add webSearch tool if Pinecone has no results
-    if (!hasPineconeResults) {
-        streamTextConfig.tools = { webSearch };
-        console.log('[VERCEL LOG] Web search tool enabled (Pinecone has no results)');
-    } else {
-        console.log('[VERCEL LOG] Web search tool disabled (Pinecone has results)');
-    }
+    console.log('[VERCEL LOG] Web search tool always enabled (AI will prioritize Pinecone when relevant)');
 
     const result = streamText(streamTextConfig);
 
