@@ -58,7 +58,7 @@ const parseGvizResponse = (text: string): SheetRow[] => {
   const data = JSON.parse(jsonText);
   const cols = data.table.cols.map((col: any, idx: number) => col.label || `col_${idx}`);
   return data.table.rows
-    .map((row: any) => {
+    .map((row: any): SheetRow | null => {
       if (!row || !row.c) return null;
       const obj: SheetRow = {};
       row.c.forEach((cell: any, idx: number) => {
