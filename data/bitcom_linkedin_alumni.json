@@ -1,6 +1,6 @@
 {
-  "scraped_at": "2025-11-27T12:51:32.184903",
-  "total_profiles": 54,
+  "scraped_at": "2025-11-27T13:43:26.346376",
+  "total_profiles": 55,
   "alumni": [
     {
       "Name": "Prajakta Bapat",
@@ -678,6 +678,18 @@
         "GoogleGoogle39,770,098 followers39,770,098 followers",
         "CiscoCiscoSoftware DevelopmentSoftware Development7,231,385 followers7,231,385 followers"
       ]
+    },
+    {
+      "Name": "Piyush Kaushik",
+      "LinkedIn URL": "https://www.linkedin.com/in/piyush-kaushik-67a4a11b9",
+      "Past Companies": [
+        "Samsung R&D Institute IndiaSamsung R&D Institute India3 yrs 2 mos3 yrs 2 mos",
+        "GE PowerGE Power2,458,904 followers2,458,904 followers",
+        "Hewlett Packard EnterpriseHewlett Packard Enterprise3,713,207 followers3,713,207 followers",
+        "CourseCourse",
+        "Hitachi VantaraHitachi Vantara",
+        "637 connections follow this page"
+      ]
     }
   ],
   "all_companies": [
@@ -758,6 +770,7 @@
     "ColliersColliers1,098,161 followers1,098,161 followers",
     "Content WriterContent WriterSep 2022 - Feb 2023 · 6 mosSep 2022 to Feb 2023 · 6 mos",
     "Cornell University",
+    "CourseCourse",
     "Curate Data Analytics",
     "Data EngineerData EngineerSep 2021 - Sep 2023 · 2 yrs 1 moSep 2021 to Sep 2023 · 2 yrs 1 mo",
     "DeepSeek AI",
@@ -795,6 +808,7 @@
     "Foxy",
     "Freyr SolutionsFreyr SolutionsFull-time · 2 yrs 6 mosFull-time · 2 yrs 6 mosRemoteRemote",
     "GE PowerGE Power2,458,871 followers2,458,871 followers",
+    "GE PowerGE Power2,458,904 followers2,458,904 followers",
     "GEGE5,150,488 followers5,150,488 followers",
     "GEGE5,150,571 followers5,150,571 followers",
     "GEGE5,150,577 followers5,150,577 followers",
@@ -824,6 +838,8 @@
     "Harvard Kennedy School",
     "Harvard Law School",
     "Head of OperationsHead of OperationsFeb 2023 - Oct 2023 · 9 mosFeb 2023 to Oct 2023 · 9 mos",
+    "Hewlett Packard EnterpriseHewlett Packard Enterprise3,713,207 followers3,713,207 followers",
+    "Hitachi VantaraHitachi Vantara",
     "IBMIBM18,964,616 followers18,964,616 followers",
     "IBMIBM18,964,621 followers18,964,621 followers",
     "IBMIBM18,964,624 followers18,964,624 followers",
@@ -916,6 +932,7 @@
     "SBOA School & Junior College logo",
     "SLB",
     "Samagra | Transforming GovernanceSamagra | Transforming Governance",
+    "Samsung R&D Institute IndiaSamsung R&D Institute India3 yrs 2 mos3 yrs 2 mos",
     "Scead Foundation - India logo",
     "Secretary GeneralSecretary GeneralJul 2016 - Jun 2017 · 1 yrJul 2016 to Jun 2017 · 1 yr",
     "SecretarySecretaryJan 2019 - Jun 2019 · 6 mosJan 2019 to Jun 2019 · 6 mos",
@@ -978,5 +995,5 @@
     "nasscomnasscom",
     "upGrad"
   ],
-  "companies_count": 296
+  "companies_count": 301
 }

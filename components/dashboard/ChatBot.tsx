@@ -14,6 +14,16 @@ interface Message {
   timestamp: Date;
 }
 
+const cleanResponseText = (text: string) => {
+  if (!text) return '';
+  let cleaned = text.replace(/\*\*/g, '');
+  cleaned = cleaned.replace(/--/g, '');
+  cleaned = cleaned.replace(/\$/g, '₹');
+  cleaned = cleaned.replace(/\[(.*?)\]\((.*?)\)/g, '$1');
+  cleaned = cleaned.replace(/Sources?:[\s\S]*$/i, '').trim();
+  return cleaned;
+};
+
 const WELCOME_MESSAGE: Message = {
   id: 'welcome-1',
   text: "Hi! I'm PlaceBot. I can help you with previous year interview transcripts, preparation tips, company insights, and more. How can I assist you today?",
@@ -176,10 +186,11 @@ export default function ChatBot() {
                   hasReceivedData = true;
                 }
                 accumulatedText += data.delta;
+                const cleanedDelta = cleanResponseText(accumulatedText);
                 setMessages(prev =>
                   prev.map(msg =>
                     msg.id === botMessageId
-                      ? { ...msg, text: accumulatedText }
+                      ? { ...msg, text: cleanedDelta }
                       : msg
                   )
                 );
@@ -188,10 +199,11 @@ export default function ChatBot() {
               else if (data.type === 'text-start') {
                 accumulatedText = '';
                 hasReceivedData = true;
+                const cleanedStart = cleanResponseText(accumulatedText);
                 setMessages(prev =>
                   prev.map(msg =>
                     msg.id === botMessageId
-                      ? { ...msg, text: '' }
+                      ? { ...msg, text: cleanedStart }
                       : msg
                   )
                 );
@@ -199,11 +211,12 @@ export default function ChatBot() {
               // Handle text (complete text block)
               else if (data.type === 'text' && data.text) {
                 accumulatedText = data.text;
+                const cleanedText = cleanResponseText(accumulatedText);
                 hasReceivedData = true;
                 setMessages(prev =>
                   prev.map(msg =>
                     msg.id === botMessageId
-                      ? { ...msg, text: accumulatedText }
+                      ? { ...msg, text: cleanedText }
                       : msg
                   )
                 );
@@ -218,11 +231,12 @@ export default function ChatBot() {
                     .join('');
                   if (textParts) {
                     accumulatedText = textParts;
+                    const cleanedParts = cleanResponseText(accumulatedText);
                     hasReceivedData = true;
                     setMessages(prev =>
                       prev.map(msg =>
                         msg.id === botMessageId
-                          ? { ...msg, text: accumulatedText }
+                          ? { ...msg, text: cleanedParts }
                           : msg
                       )
                     );
@@ -296,10 +310,11 @@ export default function ChatBot() {
 
       // Final update - ensure we have the complete text
       if (accumulatedText) {
+        const cleanedFinal = cleanResponseText(accumulatedText);
         setMessages(prev =>
           prev.map(msg =>
             msg.id === botMessageId
-              ? { ...msg, text: accumulatedText }
+              ? { ...msg, text: cleanedFinal }
               : msg
           )
         );

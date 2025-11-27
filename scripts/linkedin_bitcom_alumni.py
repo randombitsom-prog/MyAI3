@@ -229,18 +229,20 @@ class LinkedInScraper:
             print("   Please check the browser window for any prompts or errors")
             return False
     
-    def search_alumni(self, max_results: int = 250, early_return_threshold: int = 100) -> List[str]:
+    def iter_search_alumni(self, max_results: int = 250, max_pages: int = 50):
         """
-        Search for BITSoM MBA alumni on LinkedIn.
+        Generator that yields new profile URLs page-by-page.
+        As soon as a page worth of profiles is discovered, it yields them so the caller
+        can begin scraping immediately (no waiting for many pages).
         
         Args:
-            max_results: Maximum number of profiles to collect
-            early_return_threshold: Return early if we find this many profiles (to start scraping sooner)
-            
-        Returns:
-            List of profile URLs
+            max_results: Maximum number of profile URLs to yield
+            max_pages: Maximum number of search result pages to visit
+        
+        Yields:
+            Tuple (page_number, List[str]) containing new profile URLs found on that page
         """
-        print(f"🔍 Searching for BITSoM MBA alumni (target: {max_results} results, will return early at {early_return_threshold})...")
+        print(f"🔍 Searching for BITSoM MBA alumni (target: {max_results} results)...")
         
         # LinkedIn search URL for BITSoM MBA
         search_url = "https://www.linkedin.com/search/results/people/?keywords=BITSoM%20MBA&origin=GLOBAL_SEARCH_HEADER"
@@ -249,21 +251,21 @@ class LinkedInScraper:
             self.driver.get(search_url)
             time.sleep(5)  # Wait longer for page to load
             
-            profile_urls = []
+            all_seen_urls = set()
             scroll_pause = 3  # Increased pause
             no_new_profiles_count = 0
             max_no_new_profiles = 3  # Reduced - if no new profiles after 3 scrolls, try next page
             scroll_count = 0
             max_scrolls = 50  # Max scrolls per page
             page_number = 1
-            max_pages = 50  # Maximum number of pages to search
-            max_pages_before_early_return = 3  # Return early after 3 pages if we have enough (reduced to start scraping sooner)
             
+            total_found = 0
+            max_pages = max_pages or 50
             print("   Starting to scroll and collect profiles...")
             
-            while len(profile_urls) < max_results and page_number <= max_pages:
+            while total_found < max_results and page_number <= max_pages:
                 scroll_count += 1
-                previous_count = len(profile_urls)
+                previous_count = total_found
                 
                 # Scroll down gradually (multiple small scrolls)
                 for i in range(3):
@@ -278,6 +280,7 @@ class LinkedInScraper:
                 soup = BeautifulSoup(self.driver.page_source, 'html.parser')
                 links = soup.find_all('a', href=True)
                 
+                page_urls = []
                 for link in links:
                     href = link.get('href', '')
                     # More specific check for profile links
@@ -293,16 +296,22 @@ class LinkedInScraper:
                         # Normalize URL (remove trailing slash)
                         full_url = self.normalize_url(full_url)
                         
-                        # Only add if it's a valid profile URL and not already in list
-                        if full_url and '/in/' in full_url and full_url not in profile_urls:
-                            profile_urls.append(full_url)
+                        # Only add if it's a valid profile URL and not already collected
+                        if full_url and '/in/' in full_url and full_url not in all_seen_urls:
+                            all_seen_urls.add(full_url)
+                            page_urls.append(full_url)
+                            total_found += 1
+                            if total_found >= max_results:
+                                break
+                if total_found >= max_results:
+                    pass  # fall through to processing below
                 
                 # Check if we found new profiles
-                if len(profile_urls) == previous_count:
+                if total_found == previous_count:
                     no_new_profiles_count += 1
                     if no_new_profiles_count >= max_no_new_profiles:
                         print(f"   ⚠️  No new profiles found after {max_no_new_profiles} scrolls on page {page_number}")
-                        print(f"   📄 Found {len(profile_urls)} total profiles so far, trying next page...")
+                        print(f"   📄 Found {total_found} total profiles so far, trying next page...")
                         
                         # Try to go to next page
                         next_page_clicked = False
@@ -389,22 +398,18 @@ class LinkedInScraper:
                                 break
                 else:
                     no_new_profiles_count = 0  # Reset counter if we found new profiles
+                    if page_urls:
+                        print(f"   📄 Page {page_number}: found {len(page_urls)} new profiles (total {total_found})")
+                        yield page_number, page_urls
+                    else:
+                        print(f"   📄 Page {page_number}: no new (unique) profiles")
                 
-                # Early return if we have enough profiles (more flexible - can return after fewer pages if we have enough)
-                if len(profile_urls) >= early_return_threshold:
-                    if page_number >= max_pages_before_early_return:
-                        print(f"   ✅ Found {len(profile_urls)} profiles after {page_number} pages - returning early to start scraping")
-                        break
-                    elif len(profile_urls) >= early_return_threshold * 1.5:  # If we have 50% more than threshold, return even earlier
-                        print(f"   ✅ Found {len(profile_urls)} profiles (well above threshold) after {page_number} pages - returning early to start scraping")
-                        break
-                
-                if len(profile_urls) >= max_results:
+                if total_found >= max_results:
                     break
                 
                 # Progress update
-                if scroll_count % 5 == 0 or len(profile_urls) % 10 == 0:
-                    print(f"   Page {page_number}, Scrolled {scroll_count} times, found {len(profile_urls)} profiles so far...")
+                if scroll_count % 5 == 0 or total_found % 10 == 0:
+                    print(f"   Page {page_number}, Scrolled {scroll_count} times, found {total_found} profiles so far...")
                 
                 # Prevent infinite scrolling on same page
                 if scroll_count >= max_scrolls:
@@ -423,8 +428,11 @@ class LinkedInScraper:
                         print(f"   ⚠️  Could not navigate to next page. Stopping search.")
                         break
             
-            print(f"✅ Found {len(profile_urls)} profile URLs after {scroll_count} scrolls")
-            return profile_urls[:max_results] if len(profile_urls) > max_results else profile_urls
+            if total_found > 0:
+                print(f"✅ Found {total_found} unique profile URLs after {scroll_count} scrolls")
+            else:
+                print("⚠️  No profile URLs found during search")
+            return
             
         except Exception as e:
             print(f"❌ Search error: {e}")
@@ -685,149 +693,105 @@ class LinkedInScraper:
                 print("❌ Cannot proceed without login")
                 return
             
-            # Search for alumni - but start scraping once we have a reasonable number
-            # Strategy: Search for a reasonable batch first, filter, then start scraping
-            # If we need more, we can search again later
-            
-            initial_search_size = min(150, max_profiles + 50)  # Search for 150 or max_profiles+50, whichever is smaller
-            early_return_at = 100  # Return early after finding 100 profiles
-            print(f"🔍 Searching for initial batch of {initial_search_size} profiles (will return early at {early_return_at})...")
-            
-            profile_urls = self.search_alumni(max_results=initial_search_size, early_return_threshold=early_return_at)
-            
-            if not profile_urls:
-                print("❌ No profiles found")
-                return
-            
-            print(f"📊 Found {len(profile_urls)} total profiles from initial search")
-            
-            # Filter out already scraped URLs - ONLY exclude profiles that are actually in the JSON
-            # Normalize URLs for comparison
-            if exclude_existing:
-                if existing_urls:
-                    original_count = len(profile_urls)
-                    # Normalize URLs and filter
-                    normalized_profile_urls = []
-                    for url in profile_urls:
-                        normalized = self.normalize_url(url)
-                        if normalized and normalized not in existing_urls:
-                            normalized_profile_urls.append(url)  # Keep original URL format
-                    profile_urls = normalized_profile_urls
-                    excluded_count = original_count - len(profile_urls)
-                    print(f"🔍 Excluded {excluded_count} already scraped profiles (found in JSON)")
-                    print(f"📊 Have {len(profile_urls)} NEW profiles to scrape (target: {max_profiles})")
-                else:
-                    print(f"📊 No existing profiles in JSON - all {len(profile_urls)} profiles are new")
-            else:
-                print(f"📊 Not excluding existing profiles - will scrape all {len(profile_urls)} profiles")
-            
-            # If we don't have enough, search for more (but don't wait forever)
-            if len(profile_urls) < max_profiles:
-                needed = max_profiles - len(profile_urls)
-                additional_search_size = needed + 50
-                early_return_at_additional = max(50, needed)  # Return early when we have enough
-                print(f"⚠️  Need {needed} more profiles. Searching for additional {additional_search_size} profiles (will return early at {early_return_at_additional})...")
-                
-                additional_urls = self.search_alumni(max_results=additional_search_size, early_return_threshold=early_return_at_additional)
-                
-                if additional_urls:
-                    # Filter out duplicates and already scraped - ONLY exclude if in JSON
-                    # Normalize URLs for comparison
-                    existing_normalized = {self.normalize_url(url) for url in profile_urls} if profile_urls else set()
-                    for url in additional_urls:
-                        normalized = self.normalize_url(url)
-                        # Check if not a duplicate (normalized comparison)
-                        if normalized and normalized not in existing_normalized:
-                            # Check if not in JSON (if excluding)
-                            if not exclude_existing or normalized not in existing_urls:
-                                profile_urls.append(url)  # Keep original URL format
-                                existing_normalized.add(normalized)  # Track normalized version
-                                if len(profile_urls) >= max_profiles:
-                                    break
-                    
-                    print(f"📊 After additional search: {len(profile_urls)} new profiles")
-            
-            # Final filter of already scraped URLs - ONLY exclude profiles in JSON (normalized comparison)
-            if exclude_existing and existing_urls:
-                original_count = len(profile_urls)
-                # Normalize URLs for comparison
-                filtered_urls = []
-                for url in profile_urls:
-                    normalized = self.normalize_url(url)
-                    if normalized and normalized not in existing_urls:
-                        filtered_urls.append(url)  # Keep original URL format
-                profile_urls = filtered_urls
-                excluded_count = original_count - len(profile_urls)
-                if excluded_count > 0:
-                    print(f"\n🔍 Final filter: Excluded {excluded_count} already scraped profiles (found in JSON)")
-                print(f"📊 Have {len(profile_urls)} NEW profiles to scrape (target: {max_profiles})")
-            
-            # Limit to max_profiles new profiles (but proceed even if we have fewer)
-            if len(profile_urls) > max_profiles:
-                profile_urls = profile_urls[:max_profiles]
-                print(f"📊 Limited to {max_profiles} profiles (as requested)")
-            
-            if not profile_urls:
-                print("✅ All available profiles have already been scraped!")
-                print(f"   Found {len(existing_urls)} total profiles in database")
-                return
-            
-            # Proceed to scraping even if we have fewer profiles than target
-            if len(profile_urls) < max_profiles:
-                print(f"⚠️  Note: Found {len(profile_urls)} new profiles (less than target of {max_profiles})")
-                print(f"   Will scrape all available new profiles")
-            
-            print(f"✅ Will scrape {len(profile_urls)} new profiles")
-            
-            # Extract data from each profile
-            print(f"\n📊 Extracting data from {len(profile_urls)} profiles...")
+            print(f"🔍 Starting incremental search + scrape (target: {max_profiles} new profiles)")
+            processed_urls = set(existing_urls) if exclude_existing else set()
+            initial_alumni_count = len(self.alumni_data)
+            new_profiles_added = 0
             failed_count = 0
-            for i, url in enumerate(profile_urls, 1):
-                try:
-                    print(f"  [{i}/{len(profile_urls)}] Processing: {url}")
-                    
-                    # Wrap extract_profile_data in try-except to catch any errors
-                    try:
-                        data = self.extract_profile_data(url)
-                        if data:
-                            self.alumni_data.append(data)
-                            print(f"      ✅ Extracted: {data.get('Name', 'Unknown')} - {len(data.get('Past Companies', []))} companies")
-                            
-                            # Save progress after EVERY profile
-                            try:
-                                self.save_progress(is_error=False)
-                                print(f"      💾 Saved to JSON ({len(self.alumni_data)} total profiles)")
-                            except Exception as save_error:
-                                print(f"      ⚠️  Error saving progress: {save_error}")
-                                # Continue anyway, don't stop the scraping
-                        else:
-                            print(f"      ⚠️  Failed to extract data (returned None)")
-                            failed_count += 1
-                    except Exception as extract_error:
-                        # Catch errors from extract_profile_data itself
-                        print(f"      ❌ Error in extract_profile_data: {extract_error}")
-                        print(f"      Error type: {type(extract_error).__name__}")
-                        failed_count += 1
-                        # Continue to next profile
-                    
-                    time.sleep(delay)  # Be respectful with rate limiting
-                    
-                except KeyboardInterrupt:
-                    print("\n\n⚠️  Interrupted by user (Ctrl+C)")
-                    raise
-                except Exception as e:
-                    # Catch any other unexpected errors
-                    print(f"      ❌ Unexpected error processing {url}: {e}")
-                    print(f"      Error type: {type(e).__name__}")
-                    import traceback
-                    print(f"      Traceback:")
-                    traceback.print_exc()
-                    print(f"      Continuing with next profile...")
-                    failed_count += 1
-                    # Continue to next profile instead of stopping
-                    continue
+            max_search_results = max_profiles + 200  # Allow buffer in case some are skipped
             
-            print(f"\n✅ Scraped {len(self.alumni_data)} profiles successfully")
+            for page_number, page_urls in self.iter_search_alumni(max_results=max_search_results):
+                if not page_urls:
+                    print(f"   📄 Page {page_number}: no profile URLs detected. Moving to next page...")
+                    continue
+                
+                urls_to_scrape = []
+                skipped_existing = 0
+                
+                for url in page_urls:
+                    normalized = self.normalize_url(url)
+                    if not normalized:
+                        continue
+                    
+                    if normalized in processed_urls:
+                        continue  # Already processed in this session or existing JSON
+                    
+                    processed_urls.add(normalized)
+                    
+                    if exclude_existing and normalized in existing_urls:
+                        skipped_existing += 1
+                        continue
+                    
+                    urls_to_scrape.append(url)
+                
+                if skipped_existing:
+                    print(f"   🔁 Page {page_number}: skipped {skipped_existing} profiles already in JSON")
+                
+                if not urls_to_scrape:
+                    print(f"   📄 Page {page_number}: all profiles already known. Moving on...")
+                    continue
+                
+                print(f"   🚀 Page {page_number}: scraping {len(urls_to_scrape)} new profiles (target remaining: {max(0, max_profiles - new_profiles_added)})")
+                
+                for idx, url in enumerate(urls_to_scrape, 1):
+                    if new_profiles_added >= max_profiles:
+                        break
+                    
+                    try:
+                        print(f"  [Page {page_number} | {idx}/{len(urls_to_scrape)}] Processing: {url}")
+                        
+                        # Wrap extract_profile_data in try-except to catch any errors
+                        try:
+                            data = self.extract_profile_data(url)
+                            if data:
+                                self.alumni_data.append(data)
+                                new_profiles_added = len(self.alumni_data) - initial_alumni_count
+                                print(f"      ✅ Extracted: {data.get('Name', 'Unknown')} - {len(data.get('Past Companies', []))} companies")
+                                
+                                # Save progress after EVERY profile
+                                try:
+                                    self.save_progress(is_error=False)
+                                    print(f"      💾 Saved to JSON ({len(self.alumni_data)} total profiles)")
+                                except Exception as save_error:
+                                    print(f"      ⚠️  Error saving progress: {save_error}")
+                                    # Continue anyway, don't stop the scraping
+                            else:
+                                print(f"      ⚠️  Failed to extract data (returned None)")
+                                failed_count += 1
+                        except Exception as extract_error:
+                            # Catch errors from extract_profile_data itself
+                            print(f"      ❌ Error in extract_profile_data: {extract_error}")
+                            print(f"      Error type: {type(extract_error).__name__}")
+                            failed_count += 1
+                            # Continue to next profile
+                        
+                        time.sleep(delay)  # Be respectful with rate limiting
+                        
+                    except KeyboardInterrupt:
+                        print("\n\n⚠️  Interrupted by user (Ctrl+C)")
+                        raise
+                    except Exception as e:
+                        # Catch any other unexpected errors
+                        print(f"      ❌ Unexpected error processing {url}: {e}")
+                        print(f"      Error type: {type(e).__name__}")
+                        import traceback
+                        print(f"      Traceback:")
+                        traceback.print_exc()
+                        print(f"      Continuing with next profile...")
+                        failed_count += 1
+                        # Continue to next profile instead of stopping
+                        continue
+                
+                if new_profiles_added >= max_profiles:
+                    print(f"🎯 Reached target of {max_profiles} new profiles. Stopping search.")
+                    break
+            
+            if new_profiles_added == 0:
+                print("✅ All available profiles on visited pages already exist in JSON.")
+                print(f"   Total profiles in database remains {len(self.alumni_data)}")
+                return
+            
+            print(f"\n✅ Scraped {new_profiles_added} new profiles this session ({len(self.alumni_data)} total stored)")
             if failed_count > 0:
                 print(f"⚠️  {failed_count} profiles failed to process (skipped)")
             

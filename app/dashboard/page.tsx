@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import ChatBot from '@/components/dashboard/ChatBot';
-import { Search, TrendingUp, Users, Building2, DollarSign, Award, Briefcase, UserCheck, UserX } from 'lucide-react';
+import { Search, TrendingUp, Users, Building2, IndianRupee, Award, Briefcase, UserCheck, UserX } from 'lucide-react';
 import Image from 'next/image';
 
 const placementStats = {
@@ -147,7 +147,7 @@ export default function Dashboard() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
                 <CardTitle className="text-sm text-emerald-100">Average CTC</CardTitle>
                 <div className="p-2 bg-white/20 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-white" />
+                  <IndianRupee className="h-5 w-5 text-white" />
                 </div>
               </CardHeader>
               <CardContent className="relative z-10">
@@ -271,7 +271,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between p-4 bg-gradient-to-r from-cyan-50 to-cyan-100/50 border border-cyan-200 rounded-xl hover:border-cyan-300 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-cyan-500 rounded-lg">
-                        <DollarSign className="h-5 w-5 text-white" />
+                        <IndianRupee className="h-5 w-5 text-white" />
                       </div>
                       <span className="text-slate-700">Average CTC</span>
                     </div>
