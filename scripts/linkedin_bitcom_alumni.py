@@ -229,17 +229,18 @@ class LinkedInScraper:
             print("   Please check the browser window for any prompts or errors")
             return False
     
-    def search_alumni(self, max_results: int = 50) -> List[str]:
+    def search_alumni(self, max_results: int = 250, early_return_threshold: int = 100) -> List[str]:
         """
         Search for BITSoM MBA alumni on LinkedIn.
         
         Args:
             max_results: Maximum number of profiles to collect
+            early_return_threshold: Return early if we find this many profiles (to start scraping sooner)
             
         Returns:
             List of profile URLs
         """
-        print(f"🔍 Searching for BITSoM MBA alumni (target: {max_results} results)...")
+        print(f"🔍 Searching for BITSoM MBA alumni (target: {max_results} results, will return early at {early_return_threshold})...")
         
         # LinkedIn search URL for BITSoM MBA
         search_url = "https://www.linkedin.com/search/results/people/?keywords=BITSoM%20MBA&origin=GLOBAL_SEARCH_HEADER"
@@ -251,13 +252,16 @@ class LinkedInScraper:
             profile_urls = []
             scroll_pause = 3  # Increased pause
             no_new_profiles_count = 0
-            max_no_new_profiles = 5  # Stop if no new profiles found after 5 scrolls
+            max_no_new_profiles = 3  # Reduced - if no new profiles after 3 scrolls, try next page
             scroll_count = 0
-            max_scrolls = 100  # Maximum number of scrolls to prevent infinite loop
+            max_scrolls = 50  # Max scrolls per page
+            page_number = 1
+            max_pages = 50  # Maximum number of pages to search
+            max_pages_before_early_return = 3  # Return early after 3 pages if we have enough (reduced to start scraping sooner)
             
             print("   Starting to scroll and collect profiles...")
             
-            while len(profile_urls) < max_results and scroll_count < max_scrolls:
+            while len(profile_urls) < max_results and page_number <= max_pages:
                 scroll_count += 1
                 previous_count = len(profile_urls)
                 
@@ -270,18 +274,6 @@ class LinkedInScraper:
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(scroll_pause)
                 
-                # Try to click "Show more results" or "Next" button if it exists
-                try:
-                    # Look for "Show more results" button
-                    show_more_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Show more') or contains(text(), 'See more')]")
-                    for button in show_more_buttons:
-                        if button.is_displayed():
-                            button.click()
-                            time.sleep(2)
-                            break
-                except:
-                    pass
-                
                 # Get all profile links from current page
                 soup = BeautifulSoup(self.driver.page_source, 'html.parser')
                 links = soup.find_all('a', href=True)
@@ -290,7 +282,7 @@ class LinkedInScraper:
                     href = link.get('href', '')
                     # More specific check for profile links
                     if '/in/' in href and 'search' not in href and 'miniProfile' not in href:
-                        # Clean the URL
+                        # Clean and normalize the URL
                         if href.startswith('/'):
                             full_url = f"https://www.linkedin.com{href.split('?')[0]}"  # Remove query params
                         elif href.startswith('http'):
@@ -298,32 +290,138 @@ class LinkedInScraper:
                         else:
                             continue
                         
+                        # Normalize URL (remove trailing slash)
+                        full_url = self.normalize_url(full_url)
+                        
                         # Only add if it's a valid profile URL and not already in list
-                        if full_url not in profile_urls and '/in/' in full_url:
+                        if full_url and '/in/' in full_url and full_url not in profile_urls:
                             profile_urls.append(full_url)
                 
                 # Check if we found new profiles
                 if len(profile_urls) == previous_count:
                     no_new_profiles_count += 1
                     if no_new_profiles_count >= max_no_new_profiles:
-                        print(f"   ⚠️  No new profiles found after {max_no_new_profiles} scrolls")
-                        # Try scrolling one more time with longer wait
-                        if scroll_count < max_scrolls:
-                            print("   Trying one more aggressive scroll...")
-                            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                            time.sleep(5)
-                            continue
-                        else:
-                            break
+                        print(f"   ⚠️  No new profiles found after {max_no_new_profiles} scrolls on page {page_number}")
+                        print(f"   📄 Found {len(profile_urls)} total profiles so far, trying next page...")
+                        
+                        # Try to go to next page
+                        next_page_clicked = False
+                        try:
+                            # Method 1: Look for "Next" button by text
+                            next_buttons = self.driver.find_elements(By.XPATH, "//button[contains(., 'Next') or contains(., 'next')]")
+                            for button in next_buttons:
+                                if button.is_displayed() and button.is_enabled():
+                                    try:
+                                        button.click()
+                                        next_page_clicked = True
+                                        print(f"   ✅ Clicked 'Next' button")
+                                        break
+                                    except:
+                                        continue
+                            
+                            # Method 2: Look for pagination arrow (right arrow)
+                            if not next_page_clicked:
+                                arrow_buttons = self.driver.find_elements(By.XPATH, "//button[@aria-label='Next' or @aria-label='Go to next page' or contains(@class, 'pagination')]")
+                                for button in arrow_buttons:
+                                    if button.is_displayed() and button.is_enabled():
+                                        try:
+                                            button.click()
+                                            next_page_clicked = True
+                                            print(f"   ✅ Clicked pagination arrow")
+                                            break
+                                        except:
+                                            continue
+                            
+                            # Method 3: Look for page number links (click next page number)
+                            if not next_page_clicked:
+                                page_links = self.driver.find_elements(By.XPATH, "//button[contains(@class, 'pagination')] | //a[contains(@class, 'pagination')]")
+                                current_page_found = False
+                                for link in page_links:
+                                    try:
+                                        text = link.text.strip()
+                                        # Look for the next page number
+                                        if text.isdigit():
+                                            page_num = int(text)
+                                            if page_num == page_number + 1:
+                                                link.click()
+                                                next_page_clicked = True
+                                                print(f"   ✅ Clicked page {page_num}")
+                                                break
+                                    except:
+                                        continue
+                            
+                            # Method 4: Try to find and click the right arrow icon
+                            if not next_page_clicked:
+                                # Look for SVG or icon elements that might be the next button
+                                next_icons = self.driver.find_elements(By.XPATH, "//button[.//*[local-name()='svg']] | //a[.//*[local-name()='svg']]")
+                                for icon in next_icons:
+                                    try:
+                                        # Check if it's in a pagination area
+                                        parent = icon.find_element(By.XPATH, "./ancestor::*[contains(@class, 'pagination') or contains(@class, 'search')]")
+                                        if parent and icon.is_displayed():
+                                            icon.click()
+                                            next_page_clicked = True
+                                            print(f"   ✅ Clicked pagination icon")
+                                            break
+                                    except:
+                                        continue
+                            
+                            if next_page_clicked:
+                                page_number += 1
+                                scroll_count = 0  # Reset scroll count for new page
+                                no_new_profiles_count = 0  # Reset counter
+                                time.sleep(5)  # Wait for new page to load
+                                print(f"   📄 Now on page {page_number}, continuing search...")
+                                continue
+                            else:
+                                print(f"   ⚠️  Could not find 'Next' button. Reached end of results or LinkedIn limit.")
+                                break
+                                
+                        except Exception as e:
+                            print(f"   ⚠️  Error trying to navigate to next page: {e}")
+                            # Try one more scroll before giving up
+                            if scroll_count < max_scrolls:
+                                print("   Trying one more scroll...")
+                                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                                time.sleep(5)
+                                continue
+                            else:
+                                break
                 else:
                     no_new_profiles_count = 0  # Reset counter if we found new profiles
+                
+                # Early return if we have enough profiles (more flexible - can return after fewer pages if we have enough)
+                if len(profile_urls) >= early_return_threshold:
+                    if page_number >= max_pages_before_early_return:
+                        print(f"   ✅ Found {len(profile_urls)} profiles after {page_number} pages - returning early to start scraping")
+                        break
+                    elif len(profile_urls) >= early_return_threshold * 1.5:  # If we have 50% more than threshold, return even earlier
+                        print(f"   ✅ Found {len(profile_urls)} profiles (well above threshold) after {page_number} pages - returning early to start scraping")
+                        break
                 
                 if len(profile_urls) >= max_results:
                     break
                 
-                # Progress update every 10 scrolls or when we find significant new profiles
-                if scroll_count % 10 == 0 or len(profile_urls) % 20 == 0:
-                    print(f"   Scrolled {scroll_count} times, found {len(profile_urls)} profiles so far...")
+                # Progress update
+                if scroll_count % 5 == 0 or len(profile_urls) % 10 == 0:
+                    print(f"   Page {page_number}, Scrolled {scroll_count} times, found {len(profile_urls)} profiles so far...")
+                
+                # Prevent infinite scrolling on same page
+                if scroll_count >= max_scrolls:
+                    print(f"   ⚠️  Reached max scrolls ({max_scrolls}) on page {page_number}, trying next page...")
+                    # Try to go to next page
+                    try:
+                        next_buttons = self.driver.find_elements(By.XPATH, "//button[contains(., 'Next')]")
+                        for button in next_buttons:
+                            if button.is_displayed():
+                                button.click()
+                                page_number += 1
+                                scroll_count = 0
+                                time.sleep(5)
+                                break
+                    except:
+                        print(f"   ⚠️  Could not navigate to next page. Stopping search.")
+                        break
             
             print(f"✅ Found {len(profile_urls)} profile URLs after {scroll_count} scrolls")
             return profile_urls[:max_results] if len(profile_urls) > max_results else profile_urls
@@ -493,15 +591,35 @@ class LinkedInScraper:
             print(f"      Error type: {type(e).__name__}")
             return None
     
+    def normalize_url(self, url: str) -> str:
+        """
+        Normalize a LinkedIn URL for consistent comparison.
+        Removes query parameters and trailing slashes.
+        
+        Args:
+            url: LinkedIn profile URL
+            
+        Returns:
+            Normalized URL
+        """
+        if not url:
+            return ""
+        # Remove query parameters
+        url = url.split('?')[0]
+        # Remove trailing slash
+        url = url.rstrip('/')
+        return url
+    
     def load_existing_data(self, json_file: str = "data/bitcom_linkedin_alumni.json") -> set:
         """
         Load existing scraped data and return set of already scraped URLs.
+        URLs are normalized for consistent comparison.
         
         Args:
             json_file: Path to existing JSON file
             
         Returns:
-            Set of LinkedIn URLs that have already been scraped
+            Set of normalized LinkedIn URLs that have already been scraped
         """
         scraped_urls = set()
         
@@ -513,7 +631,9 @@ class LinkedInScraper:
                     for alumni in alumni_list:
                         url = alumni.get('LinkedIn URL', '')
                         if url:
-                            scraped_urls.add(url)
+                            normalized_url = self.normalize_url(url)
+                            if normalized_url:
+                                scraped_urls.add(normalized_url)
                     print(f"📂 Loaded {len(scraped_urls)} existing profiles from {json_file}")
             except Exception as e:
                 print(f"⚠️  Error loading existing data: {e}")
@@ -565,53 +685,97 @@ class LinkedInScraper:
                 print("❌ Cannot proceed without login")
                 return
             
-            # Search for alumni - search aggressively to find enough profiles
-            # We need to find at least max_profiles NEW profiles, so search for much more
-            search_max = max_profiles + len(existing_urls) + 200  # Large buffer to account for exclusions
-            print(f"🔍 Searching for up to {search_max} profiles to find {max_profiles} new ones...")
+            # Search for alumni - but start scraping once we have a reasonable number
+            # Strategy: Search for a reasonable batch first, filter, then start scraping
+            # If we need more, we can search again later
             
-            profile_urls = self.search_alumni(max_results=search_max)
+            initial_search_size = min(150, max_profiles + 50)  # Search for 150 or max_profiles+50, whichever is smaller
+            early_return_at = 100  # Return early after finding 100 profiles
+            print(f"🔍 Searching for initial batch of {initial_search_size} profiles (will return early at {early_return_at})...")
+            
+            profile_urls = self.search_alumni(max_results=initial_search_size, early_return_threshold=early_return_at)
             
             if not profile_urls:
                 print("❌ No profiles found")
                 return
             
-            print(f"📊 Found {len(profile_urls)} total profiles from search")
+            print(f"📊 Found {len(profile_urls)} total profiles from initial search")
             
-            # Filter out already scraped URLs
-            if exclude_existing and existing_urls:
-                original_count = len(profile_urls)
-                profile_urls = [url for url in profile_urls if url not in existing_urls]
-                excluded_count = original_count - len(profile_urls)
-                print(f"🔍 Excluded {excluded_count} already scraped profiles")
-                print(f"📊 Have {len(profile_urls)} new profiles (target: {max_profiles})")
+            # Filter out already scraped URLs - ONLY exclude profiles that are actually in the JSON
+            # Normalize URLs for comparison
+            if exclude_existing:
+                if existing_urls:
+                    original_count = len(profile_urls)
+                    # Normalize URLs and filter
+                    normalized_profile_urls = []
+                    for url in profile_urls:
+                        normalized = self.normalize_url(url)
+                        if normalized and normalized not in existing_urls:
+                            normalized_profile_urls.append(url)  # Keep original URL format
+                    profile_urls = normalized_profile_urls
+                    excluded_count = original_count - len(profile_urls)
+                    print(f"🔍 Excluded {excluded_count} already scraped profiles (found in JSON)")
+                    print(f"📊 Have {len(profile_urls)} NEW profiles to scrape (target: {max_profiles})")
+                else:
+                    print(f"📊 No existing profiles in JSON - all {len(profile_urls)} profiles are new")
+            else:
+                print(f"📊 Not excluding existing profiles - will scrape all {len(profile_urls)} profiles")
             
-            # If we don't have enough new profiles, try searching again with different approach
+            # If we don't have enough, search for more (but don't wait forever)
             if len(profile_urls) < max_profiles:
-                print(f"⚠️  Only found {len(profile_urls)} new profiles, but need {max_profiles}")
-                print("   Trying to search for more profiles...")
+                needed = max_profiles - len(profile_urls)
+                additional_search_size = needed + 50
+                early_return_at_additional = max(50, needed)  # Return early when we have enough
+                print(f"⚠️  Need {needed} more profiles. Searching for additional {additional_search_size} profiles (will return early at {early_return_at_additional})...")
                 
-                # Try searching with an even higher target
-                additional_search_max = (max_profiles - len(profile_urls)) * 2  # Search for 2x what we need
-                additional_urls = self.search_alumni(max_results=additional_search_max)
+                additional_urls = self.search_alumni(max_results=additional_search_size, early_return_threshold=early_return_at_additional)
                 
                 if additional_urls:
-                    # Filter out duplicates and already scraped
+                    # Filter out duplicates and already scraped - ONLY exclude if in JSON
+                    # Normalize URLs for comparison
+                    existing_normalized = {self.normalize_url(url) for url in profile_urls} if profile_urls else set()
                     for url in additional_urls:
-                        if url not in profile_urls and (not exclude_existing or url not in existing_urls):
-                            profile_urls.append(url)
-                            if len(profile_urls) >= max_profiles:
-                                break
+                        normalized = self.normalize_url(url)
+                        # Check if not a duplicate (normalized comparison)
+                        if normalized and normalized not in existing_normalized:
+                            # Check if not in JSON (if excluding)
+                            if not exclude_existing or normalized not in existing_urls:
+                                profile_urls.append(url)  # Keep original URL format
+                                existing_normalized.add(normalized)  # Track normalized version
+                                if len(profile_urls) >= max_profiles:
+                                    break
                     
                     print(f"📊 After additional search: {len(profile_urls)} new profiles")
             
-            # Limit to max_profiles new profiles
-            profile_urls = profile_urls[:max_profiles]
+            # Final filter of already scraped URLs - ONLY exclude profiles in JSON (normalized comparison)
+            if exclude_existing and existing_urls:
+                original_count = len(profile_urls)
+                # Normalize URLs for comparison
+                filtered_urls = []
+                for url in profile_urls:
+                    normalized = self.normalize_url(url)
+                    if normalized and normalized not in existing_urls:
+                        filtered_urls.append(url)  # Keep original URL format
+                profile_urls = filtered_urls
+                excluded_count = original_count - len(profile_urls)
+                if excluded_count > 0:
+                    print(f"\n🔍 Final filter: Excluded {excluded_count} already scraped profiles (found in JSON)")
+                print(f"📊 Have {len(profile_urls)} NEW profiles to scrape (target: {max_profiles})")
+            
+            # Limit to max_profiles new profiles (but proceed even if we have fewer)
+            if len(profile_urls) > max_profiles:
+                profile_urls = profile_urls[:max_profiles]
+                print(f"📊 Limited to {max_profiles} profiles (as requested)")
             
             if not profile_urls:
                 print("✅ All available profiles have already been scraped!")
                 print(f"   Found {len(existing_urls)} total profiles in database")
                 return
+            
+            # Proceed to scraping even if we have fewer profiles than target
+            if len(profile_urls) < max_profiles:
+                print(f"⚠️  Note: Found {len(profile_urls)} new profiles (less than target of {max_profiles})")
+                print(f"   Will scrape all available new profiles")
             
             print(f"✅ Will scrape {len(profile_urls)} new profiles")
             
