@@ -127,30 +127,18 @@ export default function ChatBot({ onExpandChange }: ChatBotProps) {
     setMessages(prev => [...prev, botMessage]);
 
     try {
-      // Convert messages to UIMessage format
-      const uiMessages = messages
-        .filter(msg => msg.id !== WELCOME_MESSAGE.id)
-        .map(msg => ({
-          id: msg.id,
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          parts: [
-            {
-              type: 'text',
-              text: msg.text,
-            },
-          ],
-        }));
-
-      uiMessages.push({
+      // Only send the current message - no conversation history
+      // Each chat is independent with its own context
+      const uiMessages = [{
         id: `user-${Date.now()}`,
-        role: 'user',
+        role: 'user' as const,
         parts: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: text.trim(),
           },
         ],
-      });
+      }];
 
       const response = await fetch('/api/chat', {
         method: 'POST',

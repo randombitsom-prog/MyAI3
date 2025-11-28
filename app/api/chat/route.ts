@@ -202,11 +202,15 @@ ${webSearchInstruction}
         estimatedTokens: Math.ceil(combinedSystemPrompt.length / 4), // Rough estimate
     });
 
+    // Only use the latest user message - each chat is independent with no conversation history
+    // This ensures each query gets fresh context from Pinecone without previous conversation influence
+    const latestMessageOnly = latestUserMessage ? [latestUserMessage] : [];
+    
     // Always enable webSearch tool, but AI will prioritize Pinecone based on instructions
     const streamTextConfig: any = {
         model: MODEL,
         system: combinedSystemPrompt,
-        messages: convertToModelMessages(messages),
+        messages: convertToModelMessages(latestMessageOnly),
         tools: { webSearch }, // Always available
         stopWhen: stepCountIs(10),
         providerOptions: {
